@@ -1,0 +1,137 @@
+# CivicConnect — Pre-GitHub Push Verification
+
+Run this verification on the folder `civicconnect-project` before any git commands are executed. Report results clearly as PASS/FAIL — do not make any changes yet, just report.
+
+---
+
+## TASK 1 — Verify backend/uploads/ folder
+
+Check `civicconnect-project/backend/uploads/`:
+- List every file inside it (including subfolders like `complaints/`)
+- Report total file count and total folder size
+- If it contains actual image files (jpg, png, webp), flag this — these should NOT be pushed to GitHub since they're old local test images, not meant to be in version control
+- Confirm whether `uploads/` is already listed in `.gitignore`
+
+---
+
+## TASK 2 — Compare backend/ against the original source
+
+Compare every file in `civicconnect-project/backend/` against the original at:
+`C:\Users\K Satya Sai Sailesh\civic-connect-backend`
+
+For each of these files, confirm it exists in both locations and the file size matches (not 0 bytes, not significantly different):
+- server.js
+- package.json
+- models/User.js
+- models/Complaint.js
+- routes/authRoutes.js
+- routes/complaintRoutes.js
+- routes/testimonialRoutes.js
+- middleware/authMiddleware.js
+- middleware/uploadMiddleware.js
+- config/db.js
+- jobs/emailService.js (if exists)
+- jobs/escalationJob.js (if exists)
+
+Report PASS or FAIL for each file individually.
+
+---
+
+## TASK 3 — Compare frontend/ against the original source
+
+Compare every file in `civicconnect-project/frontend/` against the original at:
+`C:\Users\K Satya Sai Sailesh\app\frontend\frontend-vite`
+
+For each of these files, confirm it exists in both locations and the file size matches:
+- package.json
+- vite.config.js
+- src/App.jsx
+- src/main.jsx (or index.jsx, whichever is the entry point)
+- src/context/AuthContext.js (or .jsx — check actual extension)
+- src/services/api.js
+- src/pages/LandingPage.jsx
+- src/pages/LoginPage.jsx
+- src/pages/RegisterPage.jsx
+- src/pages/CitizenDashboard.jsx
+- src/pages/AdminDashboard.jsx
+- src/pages/ProfilePage.jsx
+- src/pages/PublicFeedPage.jsx
+- src/pages/SettingsPage.jsx
+- src/layouts/DashboardLayout.jsx
+- src/components/ComplaintCard.jsx
+- src/components/NewComplaintModal.jsx
+- src/components/AadhaarVerifyModal.jsx
+- src/components/EscalationTimeline.jsx
+- src/components/ProtectedRoute.jsx
+
+Report PASS or FAIL for each file individually. If any src/ subfolder exists in the original but is missing entirely from the copy, flag it as CRITICAL.
+
+---
+
+## TASK 4 — Check for accidentally committed secrets
+
+Search every file in `civicconnect-project/` (both backend and frontend) for these patterns, which should NEVER be present in any file that will be pushed:
+- `MONGO_URI=mongodb`
+- `JWT_SECRET=`
+- `ADMIN_SECRET_CODE=`
+- `CLOUDINARY_API_SECRET=`
+- Any actual Cloudinary API key/secret values (not placeholder text)
+- Any real Aadhaar numbers
+
+If any of these are found in a file OTHER than `.env` (which is gitignored), flag it as CRITICAL — this means a secret got hardcoded somewhere by mistake.
+
+---
+
+## TASK 5 — Confirm .gitignore correctness
+
+Check `civicconnect-project/backend/.gitignore` contains:
+```
+node_modules/
+.env
+uploads/
+```
+
+Check `civicconnect-project/frontend/.gitignore` contains:
+```
+node_modules/
+dist/
+.env
+.env.local
+```
+
+Report PASS/FAIL for each.
+
+---
+
+## TASK 6 — Check .env.development and .env.production in frontend
+
+Open `civicconnect-project/frontend/.env.development` and `.env.production`.
+Confirm they ONLY contain something like:
+```
+VITE_API_URL=http://localhost:5000/api
+```
+or
+```
+VITE_API_URL=https://your-backend.onrender.com/api
+```
+
+Flag as CRITICAL if either file contains any password, secret key, or Mongo URI — these files ARE meant to be committed to GitHub since they only hold non-sensitive API URLs, so they must not contain secrets.
+
+---
+
+## FINAL OUTPUT FORMAT
+
+Give me a summary table like this:
+
+```
+TASK 1 (uploads folder):       PASS / FAIL — [details]
+TASK 2 (backend files):        PASS / FAIL — [list any failed files]
+TASK 3 (frontend files):       PASS / FAIL — [list any failed files]
+TASK 4 (secrets check):        PASS / FAIL — [list any leaked secrets found]
+TASK 5 (.gitignore check):     PASS / FAIL — [details]
+TASK 6 (.env files check):     PASS / FAIL — [details]
+
+OVERALL: SAFE TO PUSH / NOT SAFE TO PUSH — [reason if not safe]
+```
+
+Do not run any git commands. Do not delete or modify any files. This is a read-only verification pass.
