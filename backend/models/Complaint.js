@@ -57,7 +57,7 @@ ComplaintSchema.pre("save", async function (next) {
             { new: true, upsert: true }
         );
         const year = new Date().getFullYear();
-        this.complaintId = `CC-${year}-${String(counter.seq).padStart(4, "0")}`;
+        this.complaintId = `CC-${year}-${String(counter.seq).padStart(6, "0")}`;
         next();
     } catch (err) { next(err); }
 });

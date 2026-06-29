@@ -55,6 +55,30 @@ router.get("/", async (req, res) => {
     } catch (err) { res.status(500).json({ message: "Server error" }); }
 });
 
+// ── GET /track/:trackingId — Fetch complaint by tracking ID ────────────────────
+router.get("/track/:trackingId", auth, async (req, res) => {
+    try {
+        const complaint = await Complaint.findOne({ complaintId: req.params.trackingId })
+            .populate("user", "name email aadhaarVerified")
+            .populate("messages.sender", "name role");
+        
+        if (!complaint) {
+            return res.status(404).json({ message: "Complaint with this Tracking ID does not exist" });
+        }
+
+        // Authorization check: Admins can access all. Citizens can only access if it's their own or if it's public.
+        const isOwner = complaint.user._id.toString() === req.user.id;
+        if (req.user.role !== "admin" && !isOwner && !complaint.isPublic) {
+            return res.status(403).json({ message: "Access denied to private complaint" });
+        }
+
+        res.json(complaint);
+    } catch (err) {
+        console.error("Track complaint error:", err.message);
+        res.status(500).json({ message: "Server error" });
+    }
+});
+
 // ── GET /:id — Single complaint ───────────────────────────────────────────────
 router.get("/:id", auth, async (req, res) => {
     try {
