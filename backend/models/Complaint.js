@@ -45,6 +45,14 @@ const ComplaintSchema = new mongoose.Schema({
     isPublic: { type: Boolean, default: true },
     chatEnabled: { type: Boolean, default: false },   // admin opens chat
     chatReopenRequested: { type: Boolean, default: false },   // citizen requests reopen
+    history: [
+        {
+            action: { type: String, required: true },
+            description: { type: String, required: true },
+            performedBy: { type: String, required: true },
+            timestamp: { type: Date, default: Date.now }
+        }
+    ],
 }, { timestamps: true });
 
 // Auto-generate human-readable complaintId before save

@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const path = require("path");
 const Complaint = require("../models/Complaint");
+const User = require("../models/User");
 const auth = require("../middleware/authMiddleware");
 const upload = require("../middleware/uploadMiddleware");
 
@@ -20,6 +21,9 @@ router.post("/", auth, upload.array("images", 2), async (req, res) => {
         // Build image URLs from uploaded files
         const images = (req.files || []).map(f => f.path); // Cloudinary returns full URL in f.path
 
+        const citizen = await User.findById(req.user.id);
+        const performedBy = citizen ? citizen.name : "Citizen";
+
         const complaint = new Complaint({
             user: req.user.id, title, description, category,
             location: locationStr, city, district, state, pincode,
@@ -27,6 +31,12 @@ router.post("/", auth, upload.array("images", 2), async (req, res) => {
             lng: lng ? Number(lng) : null,
             priority: priority || "Normal",
             images,
+            history: [{
+                action: "Created",
+                description: "Complaint submitted by citizen.",
+                performedBy,
+                timestamp: new Date()
+            }]
         });
 
         const saved = await complaint.save();
@@ -97,12 +107,65 @@ router.put("/:id", auth, async (req, res) => {
     if (req.user.role !== "admin") return res.status(403).json({ message: "Admins only" });
     try {
         const { status, adminFeedback, priority } = req.body;
-        const updated = await Complaint.findByIdAndUpdate(
-            req.params.id,
-            { ...(status && { status }), ...(adminFeedback !== undefined && { adminFeedback }), ...(priority && { priority }) },
-            { new: true }
-        ).populate("user", "name email aadhaarVerified");
-        if (!updated) return res.status(404).json({ message: "Not found" });
+        
+        const complaint = await Complaint.findById(req.params.id);
+        if (!complaint) return res.status(404).json({ message: "Not found" });
+
+        const adminUser = await User.findById(req.user.id);
+        const performedBy = adminUser ? adminUser.name : "Admin";
+
+        const oldStatus = complaint.status;
+        const oldPriority = complaint.priority;
+
+        let historyEvents = [];
+
+        // Track status change
+        if (status && status !== oldStatus) {
+            complaint.status = status;
+            
+            if (status === "Resolved") {
+                historyEvents.push({
+                    action: "Complaint Resolved",
+                    description: "Complaint resolved by authority.",
+                    performedBy,
+                    timestamp: new Date()
+                });
+            } else {
+                historyEvents.push({
+                    action: "Status Updated",
+                    description: `${oldStatus} → ${status}`,
+                    performedBy,
+                    timestamp: new Date()
+                });
+            }
+        }
+
+        // Track priority change
+        if (priority && priority !== oldPriority) {
+            complaint.priority = priority;
+            historyEvents.push({
+                action: "Priority Changed",
+                description: `${oldPriority} → ${priority}`,
+                performedBy,
+                timestamp: new Date()
+            });
+        }
+
+        // Apply feedback
+        if (adminFeedback !== undefined) {
+            complaint.adminFeedback = adminFeedback;
+        }
+
+        // Append events
+        if (historyEvents.length > 0) {
+            if (!complaint.history) {
+                complaint.history = [];
+            }
+            complaint.history.push(...historyEvents);
+        }
+
+        const saved = await complaint.save();
+        const updated = await Complaint.findById(saved._id).populate("user", "name email aadhaarVerified");
         res.json(updated);
     } catch (err) {
         console.error("Update error:", err.message);
@@ -172,13 +235,39 @@ Government Grievance Redressal System
             escalatedAt: new Date(),
         };
 
-        await Complaint.findByIdAndUpdate(req.params.id, {
-            escalationLevel: newLevel,
-            status: "In Progress",
-            $push: { escalationLetters: letter },
+        const adminUser = await User.findById(req.user.id);
+        const performedBy = adminUser ? adminUser.name : "Admin";
+
+        const oldStatus = complaint.status;
+
+        // Update fields directly on document
+        complaint.escalationLevel = newLevel;
+        complaint.status = "In Progress";
+        complaint.escalationLetters.push(letter);
+
+        if (!complaint.history) {
+            complaint.history = [];
+        }
+
+        // Add history events
+        complaint.history.push({
+            action: `Assigned to ${toAuthority}`,
+            description: `Escalated from ${fromAuthority} to ${toAuthority}.`,
+            performedBy,
+            timestamp: new Date()
         });
 
-        const updated = await Complaint.findById(req.params.id).populate("user", "name email aadhaarVerified");
+        if (oldStatus !== "In Progress") {
+            complaint.history.push({
+                action: "Status Updated",
+                description: `${oldStatus} → In Progress`,
+                performedBy,
+                timestamp: new Date()
+            });
+        }
+
+        const saved = await complaint.save();
+        const updated = await Complaint.findById(saved._id).populate("user", "name email aadhaarVerified");
         res.json({ complaint: updated, letter });
     } catch (err) {
         console.error("Escalation error:", err.message);

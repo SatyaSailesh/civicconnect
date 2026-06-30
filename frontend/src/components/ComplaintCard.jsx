@@ -33,6 +33,21 @@ function timeAgo(dateStr) {
     return new Date(dateStr).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
+function formatHistoryDate(dateStr) {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    const day = date.getDate();
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const month = months[date.getMonth()];
+    const year = date.getFullYear();
+    let hours = date.getHours();
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const ampm = hours >= 12 ? 'AM' : 'PM';
+    hours = hours % 12;
+    hours = hours ? hours : 12;
+    return `${day} ${month} ${year} ${hours}:${minutes} ${ampm}`;
+}
+
 // ─── Chat Thread (Citizen Side) ───────────────────────────────────────────────
 function ChatThread({ complaint: initial }) {
     const [complaint, setComplaint] = useState(initial);
@@ -513,6 +528,45 @@ export default function ComplaintCard({ complaint: initialComplaint, onUpdate })
                                     <EscalationTimeline escalationLevel={complaint.escalationLevel} status={complaint.status} />
                                 </div>
                             )}
+
+                            {/* Activity Timeline */}
+                            <div className="mb-5 p-4 rounded-2xl"
+                                style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                                <p className="text-xs font-semibold text-white/35 uppercase tracking-widest mb-4"
+                                    style={{ fontFamily: "'DM Sans',sans-serif" }}>Activity Timeline</p>
+                                
+                                {!complaint.history || complaint.history.length === 0 ? (
+                                    <p className="text-xs text-white/30" style={{ fontFamily: "'DM Sans',sans-serif" }}>
+                                        No activity available yet.
+                                    </p>
+                                ) : (
+                                    <div className="flex flex-col items-start">
+                                        {complaint.history.map((event, i) => (
+                                            <div key={i} className="w-full">
+                                                {i > 0 && (
+                                                    <div className="flex justify-start pl-1.5 py-1 text-white/20 text-xs">
+                                                        ↓
+                                                    </div>
+                                                )}
+                                                <div className="flex items-start gap-3">
+                                                    <span className="text-xs mt-0.5" style={{ color: event.action.includes('Resolved') ? '#10b981' : event.action.includes('Created') ? '#3b82f6' : event.action.includes('Escalated') || event.action.includes('Assigned') ? '#ef4444' : '#f59e0b' }}>●</span>
+                                                    <div className="flex-1 min-w-0">
+                                                        <h4 className="text-xs font-bold text-white">{event.action}</h4>
+                                                        {event.description && (
+                                                            <p className="text-[11px] text-white/60 mt-0.5 leading-relaxed" style={{ fontFamily: "'DM Sans',sans-serif" }}>
+                                                                {event.description}
+                                                            </p>
+                                                        )}
+                                                        <p className="text-[10px] text-white/30 mt-0.5" style={{ fontFamily: "'DM Sans',sans-serif" }}>
+                                                            {event.performedBy ? `By ${event.performedBy} • ` : ''}{formatHistoryDate(event.timestamp)}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
 
                             {/* ── CHAT THREAD ── */}
                             <div className="mb-5">
