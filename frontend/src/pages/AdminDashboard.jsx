@@ -551,6 +551,11 @@ export default function AdminDashboard() {
     const navigate = useNavigate();
     const [complaints, setComplaints] = useState([]);
     const [users, setUsers] = useState([]);
+    const [dashboardStats, setDashboardStats] = useState({
+        total: 0, pending: 0, inProgress: 0, resolved: 0, escalated: 0,
+        highPriority: 0, totalCitizens: 0,
+        statusDistribution: [], categoryDistribution: [], last7Days: [],
+    });
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
@@ -565,46 +570,56 @@ export default function AdminDashboard() {
     const fetchAll = async () => {
         try {
             setLoading(true);
-            const [cRes, uRes] = await Promise.all([api.get('/complaints'), api.get('/auth/admin/users')]);
+            const [cRes, uRes, dRes] = await Promise.all([
+                api.get('/complaints'),
+                api.get('/auth/admin/users'),
+                api.get('/dashboard/admin'),
+            ]);
             setComplaints(cRes.data);
             setUsers(uRes.data);
+            setDashboardStats(dRes.data);
         } catch (err) { console.error(err); }
         finally { setLoading(false); }
+    };
+
+    const refreshDashboardStats = async () => {
+        try {
+            const { data } = await api.get('/dashboard/admin');
+            setDashboardStats(data);
+        } catch (err) { console.error(err); }
     };
 
     const handleUpdate = async (id, status, adminFeedback, priority) => {
         try {
             const { data } = await api.put(`/complaints/${id}`, { status, adminFeedback, priority });
             setComplaints(prev => prev.map(c => c._id === id ? data : c));
+            await refreshDashboardStats();
         } catch (err) { console.error(err); }
     };
 
     const stats = {
-        total: complaints.length,
-        pending: complaints.filter(c => c.status === 'Pending').length,
-        inProgress: complaints.filter(c => c.status === 'In Progress').length,
-        resolved: complaints.filter(c => c.status === 'Resolved').length,
-        critical: complaints.filter(c => c.priority === 'Critical').length,
-        citizens: users.filter(u => u.role === 'citizen').length,
+        total: dashboardStats.total ?? 0,
+        pending: dashboardStats.pending ?? 0,
+        inProgress: dashboardStats.inProgress ?? 0,
+        resolved: dashboardStats.resolved ?? 0,
+        critical: dashboardStats.highPriority ?? 0,
+        citizens: dashboardStats.totalCitizens ?? 0,
     };
 
-    // ── Analytics data ──
-    const catData = ['Infrastructure', 'Corruption', 'Scam', 'Public Service'].map(cat => ({
-        name: cat.split(' ')[0], value: complaints.filter(c => c.category === cat).length,
-    }));
-    const statusData = Object.keys(STATUS_CFG).map(s => ({
-        name: s, value: complaints.filter(c => c.status === s).length,
-    }));
-    // Complaints over last 7 days
-    const last7 = Array.from({ length: 7 }, (_, i) => {
-        const d = new Date(); d.setDate(d.getDate() - 6 + i);
-        const label = d.toLocaleDateString('en-IN', { weekday: 'short' });
-        const count = complaints.filter(c => {
-            const cd = new Date(c.createdAt);
-            return cd.toDateString() === d.toDateString();
-        }).length;
-        return { name: label, complaints: count };
-    });
+    const catData = dashboardStats.categoryDistribution?.length
+        ? dashboardStats.categoryDistribution
+        : ['Infrastructure', 'Corruption', 'Scam', 'Public Service'].map(cat => ({
+            name: cat.split(' ')[0], value: 0,
+        }));
+    const statusData = dashboardStats.statusDistribution?.length
+        ? dashboardStats.statusDistribution
+        : Object.keys(STATUS_CFG).map(s => ({ name: s, value: 0 }));
+    const last7 = dashboardStats.last7Days?.length
+        ? dashboardStats.last7Days
+        : Array.from({ length: 7 }, (_, i) => {
+            const d = new Date(); d.setDate(d.getDate() - 6 + i);
+            return { name: d.toLocaleDateString('en-IN', { weekday: 'short' }), complaints: 0 };
+        });
 
     const filtered = complaints.filter(c => {
         const ms = !search || c.title?.toLowerCase().includes(search.toLowerCase())
@@ -1057,6 +1072,7 @@ export default function AdminDashboard() {
                     <EscalateModal complaint={escalating} onClose={() => setEscalating(null)}
                         onEscalated={(updated) => {
                             setComplaints(prev => prev.map(c => c._id === updated._id ? updated : c));
+                            refreshDashboardStats();
                             setEscalating(null);
                         }} />
                 )}

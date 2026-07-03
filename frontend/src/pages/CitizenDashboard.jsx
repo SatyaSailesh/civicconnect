@@ -152,7 +152,8 @@ function getGreeting() {
 export default function CitizenDashboard() {
     const { user } = useAuth();
     const [complaints, setComplaints] = useState([]);
-    const [stats, setStats] = useState({ total: 0, resolved: 0, pending: 0, escalated: 0 });
+    const [stats, setStats] = useState({ total: 0, resolved: 0, pending: 0, inProgress: 0, escalated: 0 });
+    const [latestComplaints, setLatestComplaints] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [showModal, setShowModal] = useState(false);
@@ -161,7 +162,7 @@ export default function CitizenDashboard() {
     const [showAadhaar, setShowAadhaar] = useState(false);
     const [currentLocation, setCurrentLocation] = useState('Detecting location...');
 
-    useEffect(() => { fetchComplaints(); }, []);
+    useEffect(() => { fetchDashboardData(); }, []);
 
     useEffect(() => {
         if (!navigator.geolocation) { setCurrentLocation('Location unavailable'); return; }
@@ -180,16 +181,25 @@ export default function CitizenDashboard() {
         );
     }, []);
 
-    const fetchComplaints = async (isRefresh = false) => {
+    const fetchDashboardData = async (isRefresh = false) => {
         try {
             isRefresh ? setRefreshing(true) : setLoading(true);
-            const { data } = await api.get('/complaints/my');
-            setComplaints(data);
-            const resolved = data.filter(c => c.status === 'Resolved').length;
-            const escalated = data.filter(c => c.escalationLevel > 1).length;
-            setStats({ total: data.length, resolved, pending: data.length - resolved, escalated });
+            const [complaintsRes, dashboardRes] = await Promise.all([
+                api.get('/complaints/my'),
+                api.get('/dashboard/citizen'),
+            ]);
+            setComplaints(complaintsRes.data);
+            const d = dashboardRes.data;
+            setStats({
+                total: d.total ?? 0,
+                resolved: d.resolved ?? 0,
+                pending: d.pending ?? 0,
+                inProgress: d.inProgress ?? 0,
+                escalated: d.escalated ?? 0,
+            });
+            setLatestComplaints(d.latestComplaints ?? []);
         } catch (err) {
-            console.error('Failed to fetch complaints', err);
+            console.error('Failed to fetch dashboard data', err);
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -290,7 +300,7 @@ export default function CitizenDashboard() {
                         <div className="flex items-center gap-3">
                             {/* Refresh */}
                             <motion.button
-                                onClick={() => fetchComplaints(true)}
+                                onClick={() => fetchDashboardData(true)}
                                 whileTap={{ scale: 0.92 }}
                                 className="w-10 h-10 glass-panel rounded-2xl flex items-center justify-center text-white/50 hover:text-white transition-colors"
                                 title="Refresh"
@@ -353,9 +363,9 @@ export default function CitizenDashboard() {
                     {/* ── Stats Grid ── */}
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-5">
                         <StatCard delay={0.05} icon={<Icon.file className="w-5 h-5" style={{ color: '#3b82f6' }} />}
-                            label="Total Complaints" value={stats.total} trend={12} color="#3b82f6" />
+                            label="Total Complaints" value={stats.total} color="#3b82f6" />
                         <StatCard delay={0.1} icon={<Icon.check className="w-5 h-5" style={{ color: '#10b981' }} />}
-                            label="Resolved" value={stats.resolved} trend={8} color="#10b981" />
+                            label="Resolved" value={stats.resolved} color="#10b981" />
                         <StatCard delay={0.15} icon={<Icon.clock className="w-5 h-5" style={{ color: '#f59e0b' }} />}
                             label="Pending" value={stats.pending} color="#f59e0b" />
                         <StatCard delay={0.2} icon={<Icon.alert className="w-5 h-5" style={{ color: '#ef4444' }} />}
@@ -398,28 +408,28 @@ export default function CitizenDashboard() {
 
                     {/* ── Escalation Timeline ── */}
                     <AnimatePresence>
-                        {complaints.length > 0 && (
+                        {latestComplaints.length > 0 && (
                             <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}
                                 className="glass-panel rounded-3xl p-7">
                                 <div className="flex items-center justify-between mb-6">
                                     <div>
                                         <h2 className="text-lg font-bold text-white">Latest Escalation Status</h2>
                                         <p className="text-xs text-white/35 mt-0.5" style={{ fontFamily: "'DM Sans', sans-serif" }}>
-                                            {complaints[0]?.title || 'Most recent complaint'}
+                                            {latestComplaints[0]?.title || 'Most recent complaint'}
                                         </p>
                                     </div>
                                     <span className="text-xs px-3 py-1.5 rounded-full font-semibold"
                                         style={{
-                                            background: complaints[0]?.status === 'Resolved' ? 'rgba(16,185,129,0.12)' : 'rgba(245,158,11,0.12)',
-                                            color: complaints[0]?.status === 'Resolved' ? '#10b981' : '#f59e0b',
-                                            border: `1px solid ${complaints[0]?.status === 'Resolved' ? 'rgba(16,185,129,0.25)' : 'rgba(245,158,11,0.25)'}`,
+                                            background: latestComplaints[0]?.status === 'Resolved' ? 'rgba(16,185,129,0.12)' : 'rgba(245,158,11,0.12)',
+                                            color: latestComplaints[0]?.status === 'Resolved' ? '#10b981' : '#f59e0b',
+                                            border: `1px solid ${latestComplaints[0]?.status === 'Resolved' ? 'rgba(16,185,129,0.25)' : 'rgba(245,158,11,0.25)'}`,
                                         }}>
-                                        {complaints[0]?.status || 'Pending'}
+                                        {latestComplaints[0]?.status || 'Pending'}
                                     </span>
                                 </div>
                                 <EscalationTimeline
-                                    escalationLevel={complaints[0]?.escalationLevel || 1}
-                                    status={complaints[0]?.status || 'Pending'}
+                                    escalationLevel={latestComplaints[0]?.escalationLevel || 1}
+                                    status={latestComplaints[0]?.status || 'Pending'}
                                 />
                             </motion.div>
                         )}
@@ -461,7 +471,7 @@ export default function CitizenDashboard() {
                                             initial={{ opacity: 0, y: 16 }}
                                             animate={{ opacity: 1, y: 0 }}
                                             transition={{ delay: i * 0.06, duration: 0.4 }}>
-                                            <ComplaintCard complaint={complaint} onUpdate={fetchComplaints} />
+                                            <ComplaintCard complaint={complaint} onUpdate={fetchDashboardData} />
                                         </motion.div>
                                     ))}
                                 </motion.div>
@@ -495,7 +505,7 @@ export default function CitizenDashboard() {
                 <NewComplaintModal
                     isOpen={showModal}
                     onClose={() => setShowModal(false)}
-                    onSuccess={() => { fetchComplaints(); setShowModal(false); }}
+                    onSuccess={() => { fetchDashboardData(); setShowModal(false); }}
                 />
 
                 <AadhaarVerifyModal
