@@ -4,6 +4,7 @@ import DashboardLayout from '../layouts/DashboardLayout';
 import NewComplaintModal from '../components/NewComplaintModal';
 import ComplaintCard from '../components/ComplaintCard';
 import EscalationTimeline from '../components/EscalationTimeline';
+import InteractiveMap from '../components/InteractiveMap';
 import { motion, AnimatePresence, useMotionValue, useSpring } from 'framer-motion';
 import api from '../services/api';
 import AadhaarVerifyModal from '../components/AadhaarVerifyModal';
@@ -405,6 +406,21 @@ export default function CitizenDashboard() {
                             </div>
                         </motion.div>
                     )}
+
+                    {/* ── Interactive Map ── */}
+                    <div className="glass-panel rounded-3xl p-7">
+                        <div className="flex items-center justify-between mb-6">
+                            <div>
+                                <h2 className="text-lg font-bold text-white">Interactive Grievance Map</h2>
+                                <p className="text-xs text-white/35 mt-0.5" style={{ fontFamily: "'DM Sans', sans-serif" }}>
+                                    Visual tracking of your submitted complaints
+                                </p>
+                            </div>
+                        </div>
+                        <div className="h-[350px] w-full rounded-2xl overflow-hidden relative border border-white/10">
+                            <InteractiveMap complaints={complaints} isCitizen={true} />
+                        </div>
+                    </div>
 
                     {/* ── Escalation Timeline ── */}
                     <AnimatePresence>

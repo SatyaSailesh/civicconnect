@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import api from '../services/api';
+import InteractiveMap from '../components/InteractiveMap';
 
 const BASE_URL = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
 
@@ -880,6 +881,16 @@ export default function AdminDashboard() {
                             className="space-y-6">
 
                             <div className="grid lg:grid-cols-2 gap-6">
+                                {/* Interactive Map */}
+                                <div className="lg:col-span-2 rounded-3xl p-6"
+                                    style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                                    <h3 className="text-base font-bold text-white mb-1">Grievance Distribution Map</h3>
+                                    <p className="text-xs text-white/35 mb-5" style={{ fontFamily: "'DM Sans',sans-serif" }}>Geographical plotting of all reported issues</p>
+                                    <div className="h-[400px] w-full rounded-2xl overflow-hidden border border-white/10">
+                                        <InteractiveMap complaints={complaints} isCitizen={false} />
+                                    </div>
+                                </div>
+
                                 {/* Complaints over time */}
                                 <div className="rounded-3xl p-6"
                                     style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
