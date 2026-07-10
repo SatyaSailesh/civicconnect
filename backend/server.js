@@ -18,6 +18,7 @@ app.use(express.json());
 
 app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/complaints", require("./routes/complaintRoutes"));
+app.use("/api/dashboard", require("./routes/dashboardRoutes"));
 app.use("/api/testimonials", require("./routes/testimonialRoutes"));
 app.get("/", (req, res) => res.send("CivicConnect API is live! ⚡"));
 app.get("/health", (req, res) => res.json({ status: "ok", timestamp: new Date() }));
