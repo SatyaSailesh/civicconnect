@@ -1,6 +1,6 @@
 # CivicConnect – Smart Civic Grievance Management Platform
 
-## Overview of the project
+## Overview 
 
 CivicConnect is a full-stack web application that enables citizens to report civic issues while providing administrators with a centralized platform to manage, monitor, and resolve complaints efficiently.
 
