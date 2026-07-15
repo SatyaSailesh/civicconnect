@@ -106,6 +106,57 @@ function isValidCoordinate(value) {
     return value !== null && value !== undefined && value !== '' && !Number.isNaN(num);
 }
 
+function extractCoordinates(complaint) {
+    if (!complaint) return null;
+
+    let lat = null;
+    let lng = null;
+
+    // 1. Check direct lat/lng
+    if (complaint.lat !== undefined && complaint.lat !== null && complaint.lat !== '') {
+        lat = complaint.lat;
+    }
+    if (complaint.lng !== undefined && complaint.lng !== null && complaint.lng !== '') {
+        lng = complaint.lng;
+    }
+
+    // 2. Check latitude/longitude
+    if (!isValidCoordinate(lat) || !isValidCoordinate(lng)) {
+        if (complaint.latitude !== undefined && complaint.latitude !== null && complaint.latitude !== '') {
+            lat = complaint.latitude;
+        }
+        if (complaint.longitude !== undefined && complaint.longitude !== null && complaint.longitude !== '') {
+            lng = complaint.longitude;
+        }
+    }
+
+    // 3. Check nested location object properties
+    if ((!isValidCoordinate(lat) || !isValidCoordinate(lng)) && complaint.location && typeof complaint.location === 'object') {
+        if (complaint.location.lat !== undefined && complaint.location.lat !== null && complaint.location.lat !== '') {
+            lat = complaint.location.lat;
+        }
+        if (complaint.location.lng !== undefined && complaint.location.lng !== null && complaint.location.lng !== '') {
+            lng = complaint.location.lng;
+        }
+        if ((!isValidCoordinate(lat) || !isValidCoordinate(lng)) && Array.isArray(complaint.location.coordinates)) {
+            // GeoJSON format: [longitude, latitude]
+            lng = complaint.location.coordinates[0];
+            lat = complaint.location.coordinates[1];
+        }
+    }
+
+    const numLat = Number(lat);
+    const numLng = Number(lng);
+
+    if (!Number.isNaN(numLat) && !Number.isNaN(numLng) && lat !== null && lng !== null && lat !== '' && lng !== '') {
+        if (numLat >= -90 && numLat <= 90 && numLng >= -180 && numLng <= 180) {
+            return { lat: numLat, lng: numLng };
+        }
+    }
+
+    return null;
+}
+
 function getComplaintColor(complaint) {
     if (complaint.escalationLevel > 1) return '#ef4444';
     if (complaint.status === 'Resolved') return '#10b981';
@@ -114,7 +165,10 @@ function getComplaintColor(complaint) {
 }
 
 function getComplaintSignature(complaints) {
-    return complaints.map(c => `${c._id || c.complaintId || 'unknown'}:${c.lat}:${c.lng}:${c.status || ''}:${c.priority || ''}:${c.escalationLevel || 0}`).join('|');
+    return complaints.map(c => {
+        const coords = extractCoordinates(c) || { lat: 0, lng: 0 };
+        return `${c._id || c.complaintId || 'unknown'}:${coords.lat}:${coords.lng}:${c.status || ''}:${c.priority || ''}:${c.escalationLevel || 0}`;
+    }).join('|');
 }
 
 function normalizeStatus(status) {
@@ -204,19 +258,31 @@ export default function InteractiveMap({ complaints = [], isCitizen = false }) {
 
     useEffect(() => {
         return () => {
-            if (clusterGroupRef.current) {
-                clusterGroupRef.current.clearLayers();
-                if (mapRef.current && mapRef.current.hasLayer && mapRef.current.hasLayer(clusterGroupRef.current)) {
-                    mapRef.current.removeLayer(clusterGroupRef.current);
+            try {
+                if (clusterGroupRef.current) {
+                    clusterGroupRef.current.clearLayers();
+                    if (mapRef.current && typeof mapRef.current.hasLayer === 'function' && mapRef.current.hasLayer(clusterGroupRef.current)) {
+                        mapRef.current.removeLayer(clusterGroupRef.current);
+                    }
                 }
+            } catch (e) {
+                console.warn('[InteractiveMap] Error during cluster cleanup:', e);
             }
-            if (heatLayerRef.current) {
-                if (mapRef.current && mapRef.current.hasLayer && mapRef.current.hasLayer(heatLayerRef.current)) {
-                    mapRef.current.removeLayer(heatLayerRef.current);
+            try {
+                if (heatLayerRef.current) {
+                    if (mapRef.current && typeof mapRef.current.hasLayer === 'function' && mapRef.current.hasLayer(heatLayerRef.current)) {
+                        mapRef.current.removeLayer(heatLayerRef.current);
+                    }
                 }
+            } catch (e) {
+                console.warn('[InteractiveMap] Error during heatLayer cleanup:', e);
             }
-            if (mapRef.current && mapRef.current.remove) {
-                mapRef.current.remove();
+            try {
+                if (mapRef.current && typeof mapRef.current.remove === 'function') {
+                    mapRef.current.remove();
+                }
+            } catch (e) {
+                console.warn('[InteractiveMap] Error removing map during cleanup:', e);
             }
             if (mapContainerRef.current && mapContainerRef.current._leaflet_id) {
                 mapContainerRef.current._leaflet_id = null;
@@ -232,12 +298,17 @@ export default function InteractiveMap({ complaints = [], isCitizen = false }) {
     const visibleComplaints = useMemo(() => {
         const query = searchQuery.trim().toLowerCase();
         return complaints.filter((complaint) => {
-            const lat = complaint?.lat;
-            const lng = complaint?.lng;
-            if (!isValidCoordinate(lat) || !isValidCoordinate(lng)) return false;
+            const coords = extractCoordinates(complaint);
+            if (!coords) return false;
 
             const status = normalizeStatus(complaint.status);
-            if (statusFilter !== 'All' && status !== statusFilter) return false;
+            if (statusFilter !== 'All') {
+                if (statusFilter === 'Escalated') {
+                    if (!(complaint.escalationLevel > 1)) return false;
+                } else {
+                    if (status !== statusFilter) return false;
+                }
+            }
 
             const category = normalizeCategory(complaint.category);
             if (categoryFilter !== 'All' && category !== categoryFilter) return false;
@@ -272,10 +343,6 @@ export default function InteractiveMap({ complaints = [], isCitizen = false }) {
         try {
             setMapError(null);
 
-            if (complaints && complaints.length > 0) {
-                console.log('[InteractiveMap] first raw complaint', complaints[0]);
-            }
-
             if (typeof L === 'undefined' || typeof L.map !== 'function' || typeof L.tileLayer !== 'function') {
                 throw new Error('Leaflet failed to initialize.');
             }
@@ -288,17 +355,20 @@ export default function InteractiveMap({ complaints = [], isCitizen = false }) {
             const existingMap = mapRef.current;
 
             if (existingMap && existingMap._container && existingMap._container !== container) {
-                if (existingMap.remove) {
-                    existingMap.remove();
+                try {
+                    if (existingMap.remove) {
+                        existingMap.remove();
+                    }
+                } catch (e) {
+                    console.warn('[InteractiveMap] Error removing old map reference:', e);
                 }
                 mapRef.current = null;
             }
 
-            if (container && container._leaflet_id) {
-                container._leaflet_id = null;
-            }
-
             if (!mapRef.current) {
+                if (container && container._leaflet_id) {
+                    container._leaflet_id = null;
+                }
                 mapRef.current = L.map(container, {
                     zoomControl: true,
                     attributionControl: false
@@ -324,8 +394,9 @@ export default function InteractiveMap({ complaints = [], isCitizen = false }) {
             const heatLayerFactory = typeof L.heatLayer === 'function' ? L.heatLayer : null;
             if (!heatLayerRef.current && heatLayerFactory) {
                 heatLayerRef.current = heatLayerFactory([], {
-                    radius: 28,
-                    blur: 22,
+                    radius: 25,
+                    blur: 15,
+                    minOpacity: 0.4,
                     maxZoom: 17,
                     gradient: {
                         0.2: '#60a5fa',
@@ -340,13 +411,6 @@ export default function InteractiveMap({ complaints = [], isCitizen = false }) {
             const heatLayer = heatLayerRef.current;
             const shouldUseHeatmap = viewMode === 'heatmap' && heatLayer && heatmapAvailable;
 
-            console.log('[InteractiveMap] counts', {
-                totalComplaints: complaints.length,
-                validCoordinateComplaints: visibleComplaints.length,
-                markersConstructed: 0,
-                markersAddedToCluster: 0,
-            });
-
             if (shouldUseHeatmap) {
                 if (map.hasLayer(clusterGroup)) map.removeLayer(clusterGroup);
                 if (!map.hasLayer(heatLayer)) map.addLayer(heatLayer);
@@ -360,11 +424,13 @@ export default function InteractiveMap({ complaints = [], isCitizen = false }) {
                     map.invalidateSize();
                 }
             });
-            clusterGroup.clearLayers();
 
             if (visibleComplaints.length === 0) {
-                if (heatLayer && heatLayer._map) {
-                    heatLayer.setLatLngs([]);
+                clusterGroup.clearLayers();
+                if (heatLayer && heatLayer._map && typeof heatLayer.setLatLngs === 'function') {
+                    try {
+                        heatLayer.setLatLngs([]);
+                    } catch (e) {}
                 }
                 previousSignatureRef.current = '';
                 return;
@@ -375,23 +441,17 @@ export default function InteractiveMap({ complaints = [], isCitizen = false }) {
                 return;
             }
 
+            clusterGroup.clearLayers();
+
             const bounds = [];
             const heatPoints = [];
-            let markersConstructedCount = 0;
-            let markersAddedCount = 0;
+            const seenHeatPoints = new Set();
 
             visibleComplaints.forEach((complaint) => {
-                const lat = Number(complaint.lat);
-                const lng = Number(complaint.lng);
+                const coords = extractCoordinates(complaint);
+                if (!coords) return;
+                const { lat, lng } = coords;
                 const color = getComplaintColor(complaint);
-
-                const coordinateCandidates = {
-                    direct: { lat: complaint?.lat, lng: complaint?.lng },
-                    latitudeLongitude: { lat: complaint?.latitude, lng: complaint?.longitude },
-                    locationDirect: { lat: complaint?.location?.lat, lng: complaint?.location?.lng },
-                    locationCoordinates: { lat: complaint?.location?.coordinates?.[1], lng: complaint?.location?.coordinates?.[0] },
-                };
-                console.log('[InteractiveMap] coordinate candidate shapes', coordinateCandidates);
 
                 const markerHtml = `
                     <div class="marker-pulse-element" style="
@@ -457,22 +517,20 @@ export default function InteractiveMap({ complaints = [], isCitizen = false }) {
                 const marker = L.marker([lat, lng], { icon: customIcon })
                     .bindPopup(popupContent, { className: 'custom-map-popup' });
 
-                markersConstructedCount += 1;
                 clusterGroup.addLayer(marker);
-                markersAddedCount += 1;
                 bounds.push([lat, lng]);
-                heatPoints.push([lat, lng, 0.85]);
-            });
 
-            console.log('[InteractiveMap] markers pipeline', {
-                markersConstructed: markersConstructedCount,
-                markersAddedToCluster: markersAddedCount,
-                hasBounds: bounds.length > 0,
-                clusterLayerCount: clusterGroup.getLayers ? clusterGroup.getLayers().length : 'n/a',
+                const coordKey = `${lat.toFixed(6)},${lng.toFixed(6)}`;
+                if (!seenHeatPoints.has(coordKey)) {
+                    seenHeatPoints.add(coordKey);
+                    heatPoints.push([lat, lng, 0.85]);
+                }
             });
 
             if (heatLayer && heatLayer._map && typeof heatLayer.setLatLngs === 'function') {
-                heatLayer.setLatLngs(heatPoints);
+                try {
+                    heatLayer.setLatLngs(heatPoints);
+                } catch (e) {}
             }
             previousSignatureRef.current = complaintSignature;
 

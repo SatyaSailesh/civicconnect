@@ -886,7 +886,7 @@ export default function AdminDashboard() {
                                     style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
                                     <h3 className="text-base font-bold text-white mb-1">Grievance Distribution Map</h3>
                                     <p className="text-xs text-white/35 mb-5" style={{ fontFamily: "'DM Sans',sans-serif" }}>Geographical plotting of all reported issues</p>
-                                    <div className="h-[400px] w-full rounded-2xl overflow-hidden border border-white/10">
+                                    <div className="min-h-[570px] lg:h-[550px] w-full rounded-2xl overflow-hidden border border-white/10">
                                         <InteractiveMap complaints={complaints} isCitizen={false} />
                                     </div>
                                 </div>

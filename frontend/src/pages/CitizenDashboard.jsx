@@ -417,7 +417,7 @@ export default function CitizenDashboard() {
                                 </p>
                             </div>
                         </div>
-                        <div className="h-[350px] w-full rounded-2xl overflow-hidden relative border border-white/10">
+                        <div className="min-h-[520px] lg:h-[500px] w-full rounded-2xl overflow-hidden relative border border-white/10">
                             <InteractiveMap complaints={complaints} isCitizen={true} />
                         </div>
                     </div>
