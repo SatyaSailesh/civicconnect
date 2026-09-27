@@ -6,8 +6,6 @@ import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContai
 import api from '../services/api';
 import InteractiveMap from '../components/InteractiveMap';
 
-const BASE_URL = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
-
 const Icon = {
     x: p => <svg {...p} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>,
     send: p => <svg {...p} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>,
@@ -74,7 +72,7 @@ function ImageGallery({ images, onClose }) {
     return (
         <div className="fixed inset-0 bg-black/95 z-[60] flex items-center justify-center p-4" onClick={onClose}>
             <div onClick={e => e.stopPropagation()} className="relative max-w-3xl w-full">
-                <img src={`${BASE_URL}${images[idx]}`} alt="evidence"
+                <img src={images[idx]} alt="evidence"
                     className="w-full max-h-[80vh] object-contain rounded-2xl" />
                 <div className="absolute top-4 right-4 flex gap-2">
                     {images.map((_, i) => (
@@ -89,7 +87,7 @@ function ImageGallery({ images, onClose }) {
                 {images.length > 1 && (
                     <div className="flex justify-center gap-3 mt-4">
                         {images.map((img, i) => (
-                            <img key={i} src={`${BASE_URL}${img}`} alt=""
+                            <img key={i} src={img} alt=""
                                 onClick={() => setIdx(i)}
                                 className="w-20 h-14 object-cover rounded-xl cursor-pointer transition-all"
                                 style={{ opacity: i === idx ? 1 : 0.4, border: i === idx ? '2px solid #10b981' : '2px solid transparent' }} />
@@ -431,7 +429,7 @@ function DetailModal({ complaint: initialComplaint, onClose, onSave }) {
                                             <motion.div key={i} whileHover={{ scale: 1.02 }} onClick={() => { setGalleryOpen(true); }}
                                                 className="relative aspect-video rounded-2xl overflow-hidden cursor-pointer"
                                                 style={{ border: '1px solid rgba(255,255,255,0.1)' }}>
-                                                <img src={`${BASE_URL}${img}`} alt={`Evidence ${i + 1}`}
+                                                <img src={img} alt={`Evidence ${i + 1}`}
                                                     className="w-full h-full object-cover"
                                                     onError={e => { e.target.style.display = 'none'; e.target.parentNode.style.background = 'rgba(255,255,255,0.05)'; }}
                                                     crossOrigin="anonymous"
@@ -572,7 +570,7 @@ export default function AdminDashboard() {
         try {
             setLoading(true);
             const [cRes, uRes, dRes] = await Promise.all([
-                api.get('/complaints'),
+                api.get('/complaints/admin'),
                 api.get('/auth/admin/users'),
                 api.get('/dashboard/admin'),
             ]);

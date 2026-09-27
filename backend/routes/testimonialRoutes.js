@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const auth = require("../middleware/authMiddleware");
-const { Testimonial } = require("../models/Complaint");
+const Testimonial = require("../models/Testimonial");
 const User = require("../models/User");
 
 // GET /api/testimonials — public, only approved ones

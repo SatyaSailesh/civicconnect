@@ -5,6 +5,7 @@ const Complaint = require("../models/Complaint");
 const User = require("../models/User");
 const auth = require("../middleware/authMiddleware");
 const upload = require("../middleware/uploadMiddleware");
+const { notifyStatusUpdate } = require("../jobs/emailService");
 
 const AUTHORITY_LEVELS = ["", "Local Office", "Municipal Officer", "Legislative Assembly", "Chief Minister"];
 
@@ -55,8 +56,19 @@ router.get("/my", auth, async (req, res) => {
     } catch (err) { res.status(500).json({ message: "Server error" }); }
 });
 
-// ── GET / — All complaints ────────────────────────────────────────────────────
+// ── GET / — Public complaints ─────────────────────────────────────────────────
 router.get("/", async (req, res) => {
+    try {
+        const complaints = await Complaint.find({ isPublic: true })
+            .populate({ path: "user", select: "name -_id" })
+            .sort({ createdAt: -1 });
+        res.json(complaints);
+    } catch (err) { res.status(500).json({ message: "Server error" }); }
+});
+
+// ── GET /admin — All complaints (Admin) ───────────────────────────────────────
+router.get("/admin", auth, async (req, res) => {
+    if (req.user.role !== "admin") return res.status(403).json({ message: "Admins only" });
     try {
         const complaints = await Complaint.find()
             .populate("user", "name email aadhaarVerified")
@@ -166,6 +178,21 @@ router.put("/:id", auth, async (req, res) => {
 
         const saved = await complaint.save();
         const updated = await Complaint.findById(saved._id).populate("user", "name email aadhaarVerified");
+
+        if (status && status !== oldStatus && updated.user?.email) {
+            try {
+                await notifyStatusUpdate({
+                    citizenEmail: updated.user.email,
+                    citizenName: updated.user.name,
+                    complaintTitle: updated.title,
+                    newStatus: updated.status,
+                    adminFeedback: updated.adminFeedback,
+                });
+            } catch (err) {
+                console.error("Status update email failed:", err.message);
+            }
+        }
+
         res.json(updated);
     } catch (err) {
         console.error("Update error:", err.message);

@@ -4,8 +4,6 @@ import { Link } from 'react-router-dom';
 import DashboardLayout from '../layouts/DashboardLayout';
 import api from '../services/api';
 
-const BASE_URL = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
-
 const STATUS_CFG = {
     'Pending': { color: '#f59e0b', bg: 'rgba(245,158,11,0.1)', label: '⏳ Pending' },
     'In Progress': { color: '#3b82f6', bg: 'rgba(59,130,246,0.1)', label: '⚙️ In Progress' },
@@ -116,7 +114,7 @@ function FeedCard({ c, index }) {
                                                 {c.images.map((img, i) => (
                                                     <div key={i} className="w-24 h-16 rounded-xl overflow-hidden"
                                                         style={{ border: '1px solid rgba(255,255,255,0.1)' }}>
-                                                        <img src={`${BASE_URL}${img}`} alt="evidence" className="w-full h-full object-cover" />
+                                                        <img src={img} alt="evidence" className="w-full h-full object-cover" />
                                                     </div>
                                                 ))}
                                             </div>

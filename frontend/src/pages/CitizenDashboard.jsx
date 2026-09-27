@@ -159,6 +159,7 @@ export default function CitizenDashboard() {
     const [refreshing, setRefreshing] = useState(false);
     const [showModal, setShowModal] = useState(false);
     const [filter, setFilter] = useState('all');
+    const [search, setSearch] = useState('');
     const [notifOpen, setNotifOpen] = useState(false);
     const [showAadhaar, setShowAadhaar] = useState(false);
     const [currentLocation, setCurrentLocation] = useState('Detecting location...');
@@ -214,20 +215,27 @@ export default function CitizenDashboard() {
         { key: 'escalated', label: 'Escalated', count: complaints.filter(c => c.escalationLevel > 1).length },
     ];
 
-    const filtered = complaints.filter(c => {
-        if (filter === 'all') return true;
-        if (filter === 'pending') return c.status !== 'Resolved';
-        if (filter === 'resolved') return c.status === 'Resolved';
-        if (filter === 'escalated') return c.escalationLevel > 1;
-        return true;
-    });
+    const filtered = complaints
+        .filter(c => {
+            if (filter === 'all') return true;
+            if (filter === 'pending') return c.status !== 'Resolved';
+            if (filter === 'resolved') return c.status === 'Resolved';
+            if (filter === 'escalated') return c.escalationLevel > 1;
+            return true;
+        })
+        .filter(c => {
+            const query = search.trim().toLowerCase();
+            if (!query) return true;
+            return [c.title, c.description, c.category]
+                .some(value => value?.toLowerCase().includes(query));
+        });
 
     const firstName = (user?.name || user?.fullName || 'Citizen').split(' ')[0];
 
     // ── Skeleton Loading ──
     if (loading) {
         return (
-            <DashboardLayout>
+            <DashboardLayout search={search} onSearchChange={setSearch}>
                 <div className="space-y-8" style={{ fontFamily: "'Syne', 'DM Sans', sans-serif" }}>
                     <style>{`@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap');`}</style>
                     <div className="h-10 w-64 rounded-xl bg-white/6 animate-pulse" />
@@ -244,7 +252,7 @@ export default function CitizenDashboard() {
     }
 
     return (
-        <DashboardLayout>
+        <DashboardLayout search={search} onSearchChange={setSearch}>
             <div style={{ fontFamily: "'Syne', 'DM Sans', sans-serif" }}>
                 <style>{`
           @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap');

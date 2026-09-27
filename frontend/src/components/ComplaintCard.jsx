@@ -3,8 +3,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import EscalationTimeline from './EscalationTimeline';
 import api from '../services/api';
 
-const BASE_URL = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
-
 // ─── Status config ────────────────────────────────────────────────────────────
 const STATUS = {
     'Pending': { color: '#f59e0b', bg: 'rgba(245,158,11,0.1)', border: 'rgba(245,158,11,0.25)', icon: '⏳', label: 'Pending' },
@@ -352,7 +350,7 @@ export default function ComplaintCard({ complaint: initialComplaint, onUpdate })
                         {hasImages && !imgError ? (
                             <div className="relative w-14 h-14 rounded-2xl overflow-hidden"
                                 style={{ border: '1px solid rgba(255,255,255,0.1)' }}>
-                                <img src={`${BASE_URL}${complaint.images[0]}`} alt="Complaint"
+                                <img src={complaint.images[0]} alt="Complaint"
                                     className="w-full h-full object-cover"
                                     onError={() => setImgError(true)} />
                                 {complaint.images.length > 1 && (
@@ -478,7 +476,7 @@ export default function ComplaintCard({ complaint: initialComplaint, onUpdate })
                                             <motion.div key={i} whileHover={{ scale: 1.04 }}
                                                 className="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0"
                                                 style={{ border: '1px solid rgba(255,255,255,0.1)' }}>
-                                                <img src={`${BASE_URL}${img}`} alt={`Evidence ${i + 1}`}
+                                                <img src={img} alt={`Evidence ${i + 1}`}
                                                     className="w-full h-full object-cover"
                                                     onError={e => e.target.parentNode.style.display = 'none'} />
                                             </motion.div>

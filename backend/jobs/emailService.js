@@ -94,7 +94,7 @@ async function notifyStatusUpdate({ citizenEmail, citizenName, complaintTitle, n
       ${newStatus === 'Resolved' ? '<p>Thank you for using CivicConnect to make your voice heard! 🙏</p>' : '<p>You can track your complaint progress on your dashboard.</p>'}
     `,
         ctaText: 'View Dashboard',
-        ctaUrl: 'http://localhost:5173/citizen',
+        ctaUrl: `${process.env.FRONTEND_URL}/citizen`,
     });
 }
 
@@ -115,7 +115,7 @@ async function notifyEscalation({ citizenEmail, citizenName, complaintTitle, esc
       <p>Higher authorities will now review your complaint. We appreciate your patience.</p>
     `,
         ctaText: 'Track Complaint',
-        ctaUrl: 'http://localhost:5173/citizen',
+        ctaUrl: `${process.env.FRONTEND_URL}/citizen`,
     });
 }
 
@@ -136,7 +136,7 @@ async function sendWelcomeEmail({ email, name, aadhaarVerified }) {
       <p>Start filing complaints, tracking resolutions, and holding leaders accountable.</p>
     `,
         ctaText: 'Go to Dashboard',
-        ctaUrl: 'http://localhost:5173/citizen',
+        ctaUrl: `${process.env.FRONTEND_URL}/citizen`,
     });
 }
 

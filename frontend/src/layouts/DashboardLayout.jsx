@@ -20,7 +20,7 @@ const Icons = {
     chevronRight: p => <svg {...p} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>,
 };
 
-export default function DashboardLayout({ children }) {
+export default function DashboardLayout({ children, search: searchValue, onSearchChange }) {
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [mobileOpen, setMobileOpen] = useState(false);
     const [search, setSearch] = useState('');
@@ -43,6 +43,12 @@ export default function DashboardLayout({ children }) {
     ];
 
     const handleLogout = () => { logout(); navigate('/login'); };
+    const activeSearch = searchValue ?? search;
+    const handleSearchChange = (event) => {
+        const value = event.target.value;
+        if (onSearchChange) onSearchChange(value);
+        else setSearch(value);
+    };
 
     const isActive = (path) => location.pathname === path;
 
@@ -230,7 +236,7 @@ export default function DashboardLayout({ children }) {
                     {/* Search */}
                     <div className="relative max-w-sm w-full">
                         <Icons.search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/25" />
-                        <input type="text" value={search} onChange={e => setSearch(e.target.value)}
+                        <input type="text" value={activeSearch} onChange={handleSearchChange}
                             placeholder="Search complaints..."
                             className="w-full pl-10 pr-4 py-2.5 rounded-2xl text-sm text-white placeholder-white/25 outline-none transition-all"
                             style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', fontFamily: "'DM Sans',sans-serif" }} />

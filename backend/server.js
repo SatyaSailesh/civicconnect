@@ -2,6 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const connectDB = require("./config/db");
+const { startEscalationJob } = require("./jobs/EscalationJob");
 
 const app = express();
 connectDB();
@@ -24,4 +25,5 @@ app.get("/", (req, res) => res.send("CivicConnect API is live! ⚡"));
 app.get("/health", (req, res) => res.json({ status: "ok", timestamp: new Date() }));
 
 const PORT = process.env.PORT || 5000;
+startEscalationJob();
 app.listen(PORT, () => console.log(`🚀 Server on port ${PORT}`));
