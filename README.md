@@ -111,6 +111,17 @@ Open [the web app](http://localhost:5173). Check [backend health](http://localho
 - Set `FRONTEND_URL` on the backend to the deployed frontend origin. Set `VITE_API_URL` on the frontend to the deployed backend URL ending in `/api` before building.
 - Run `npm run build` from `frontend` to produce the production build.
 
+## Verify and demo
+
+Run `npm test` from `backend` with local MongoDB running. The test creates and removes a dedicated database. Set `TEST_MONGO_PORT` if your local instance uses a different port. GitHub Actions runs this test and the frontend production build on pull requests.
+
+For an interview demo, use two browser sessions:
+
+1. As a verified demo citizen, file a streetlight complaint and copy its tracking ID.
+2. As an approved official, find the complaint, open chat, and update the status to **Resolved**.
+3. Return to the citizen dashboard, search by tracking ID, show the activity timeline, and rate the resolution.
+4. Show the automated check and explain how the API limits access to private complaints and chat messages.
+
 ## Future Roadmap
 
 - AI Complaint Assistant
