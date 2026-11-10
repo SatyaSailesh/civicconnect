@@ -54,12 +54,12 @@ export default function AadhaarVerifyModal({ isOpen, onClose, onVerified }) {
                         {success ? '✅' : '🪪'}
                     </motion.div>
                     <h2 className="text-xl font-extrabold text-white mb-2">
-                        {success ? 'Aadhaar Verified!' : 'Verify Your Aadhaar'}
+                        {success ? 'Aadhaar Verified!' : 'Demo Aadhaar Verification'}
                     </h2>
                     <p className="text-sm text-white/40 leading-relaxed" style={{ fontFamily: "'DM Sans',sans-serif" }}>
                         {success
                             ? 'You can now file complaints on CivicConnect.'
-                            : 'Enter your 12-digit Aadhaar number. It will be matched against our verified records.'}
+                            : 'Enter the 12-digit demo code assigned to your account. Use a synthetic number for testing.'}
                     </p>
                 </div>
 
@@ -79,7 +79,7 @@ export default function AadhaarVerifyModal({ isOpen, onClose, onVerified }) {
 
                         <div>
                             <label className="block text-xs font-semibold text-white/30 uppercase tracking-widest mb-2.5"
-                                style={{ fontFamily: "'DM Sans',sans-serif" }}>Aadhaar Number</label>
+                                style={{ fontFamily: "'DM Sans',sans-serif" }}>Demo verification code</label>
                             <input
                                 type="text" value={aadhaar} inputMode="numeric"
                                 onChange={e => { setAadhaar(formatAadhaar(e.target.value)); setError(''); }}

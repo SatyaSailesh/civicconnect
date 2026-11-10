@@ -13,7 +13,7 @@ const transporter = nodemailer.createTransport({
 });
 
 // ── Verify connection on startup ──
-transporter.verify((err) => {
+if (process.env.EMAIL_USER && process.env.EMAIL_PASS) transporter.verify((err) => {
     if (err) console.warn('⚠ Email service not configured:', err.message);
     else console.log('✅ Email service ready');
 });

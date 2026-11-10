@@ -29,10 +29,21 @@ async function runEscalation() {
         for (const complaint of stale) {
             const newLevel = (complaint.escalationLevel || 1) + 1;
 
-            await Complaint.findByIdAndUpdate(complaint._id, {
-                escalationLevel: newLevel,
-                updatedAt: new Date(), // reset timer
-            });
+            const updated = await Complaint.findOneAndUpdate(
+                { _id: complaint._id, escalationLevel: complaint.escalationLevel, updatedAt: complaint.updatedAt },
+                {
+                    $set: { escalationLevel: newLevel },
+                    $push: {
+                        history: {
+                            action: "Automatically Escalated",
+                            description: `Escalated to level ${newLevel} after ${ESCALATION_DAYS} days without an update.`,
+                            performedBy: "CivicConnect",
+                            timestamp: new Date(),
+                        },
+                    },
+                }
+            );
+            if (!updated) continue;
 
             // Notify citizen
             if (complaint.user?.email) {

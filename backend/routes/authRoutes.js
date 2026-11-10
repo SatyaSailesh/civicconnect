@@ -7,7 +7,7 @@ const auth = require("../middleware/authMiddleware");
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const getWhitelist = () => {
-  const map = {};
+  const map = Object.create(null);
   (process.env.AADHAAR_WHITELIST || "").split(",").forEach(entry => {
     const [e, a] = entry.split(":");
     if (e && a) map[e.trim().toLowerCase()] = a.trim();
@@ -28,19 +28,20 @@ const getAdminWhitelist = () =>
 //   3. Account is created with isApproved=false — admin must approve manually
 router.post("/register", async (req, res) => {
   try {
-    const { name, email, password, role, adminSecretCode } = req.body;
+    const { name, email: rawEmail, password, role, adminSecretCode } = req.body;
+    const email = typeof rawEmail === "string" ? rawEmail.trim().toLowerCase() : "";
 
-    if (!name?.trim() || !email?.trim() || !password)
+    if (typeof name !== "string" || !name.trim() || !email || typeof password !== "string" || !password)
       return res.status(400).json({ message: "Name, email and password are required" });
 
-    const existing = await User.findOne({ email: email.toLowerCase() });
+    const existing = await User.findOne({ email });
     if (existing) return res.status(400).json({ message: "An account with this email already exists" });
 
     // ── Admin security checks ─────────────────────────────────────────────────
     if (role === "admin") {
       // Layer 1: Email must be in admin whitelist
       const adminWhitelist = getAdminWhitelist();
-      if (adminWhitelist.length > 0 && !adminWhitelist.includes(email.toLowerCase())) {
+      if (!adminWhitelist.includes(email)) {
         return res.status(403).json({
           message: "This email is not authorised for an official account. Contact your system administrator."
         });
@@ -48,10 +49,10 @@ router.post("/register", async (req, res) => {
 
       // Layer 2: Must provide correct secret code
       const correctCode = process.env.ADMIN_SECRET_CODE;
-      if (!adminSecretCode?.trim()) {
+      if (typeof adminSecretCode !== "string" || !adminSecretCode.trim()) {
         return res.status(403).json({ message: "Official accounts require an authority verification code." });
       }
-      if (adminSecretCode.trim() !== correctCode) {
+      if (!correctCode || adminSecretCode.trim() !== correctCode) {
         return res.status(403).json({ message: "Invalid authority verification code. Access denied." });
       }
     }
@@ -60,19 +61,14 @@ router.post("/register", async (req, res) => {
     const salt = await bcrypt.genSalt(12);
     const hashed = await bcrypt.hash(password, salt);
 
-    // ── Auto-verify Aadhaar if whitelisted ───────────────────────────────────
-    const aadhaarMap = getWhitelist();
-    const aadhaarVerified = !!aadhaarMap[email.toLowerCase()];
-
     // ── Layer 3: Admin accounts start as pending approval ────────────────────
     const isApproved = role !== "admin"; // citizens auto-approved, admins need approval
 
     const user = new User({
       name: name.trim(),
-      email: email.toLowerCase().trim(),
+      email,
       password: hashed,
       role: role === "admin" ? "admin" : "citizen",
-      aadhaarVerified,
       isApproved,
     });
     await user.save();
@@ -80,19 +76,10 @@ router.post("/register", async (req, res) => {
     // ── Layer 4: Admin pending approval — don't issue token yet ──────────────
     if (role === "admin" && !isApproved) {
       return res.status(201).json({
-        message: "Official account created. Your account is pending approval by the system administrator. You will be notified once approved.",
+        message: "Official account created. Your account is pending approval by the system administrator. You can sign in after approval.",
         pendingApproval: true,
       });
     }
-    // First admin — auto-approved, issue token immediately
-    if (role === "admin" && isApproved) {
-      const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "7d" });
-      return res.status(201).json({
-        token,
-        user: { id: user._id, name: user.name, email: user.email, role: user.role, aadhaarVerified: user.aadhaarVerified, isApproved: true },
-      });
-    }
-
     // Citizen — issue token and auto-login
     const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "7d" });
     res.status(201).json({
@@ -107,6 +94,7 @@ router.post("/register", async (req, res) => {
       },
     });
   } catch (err) {
+    if (err.code === 11000) return res.status(400).json({ message: "An account with this email already exists" });
     console.error("Register error:", err.message);
     res.status(500).json({ message: "Server error during registration" });
   }
@@ -118,7 +106,9 @@ router.post("/login", async (req, res) => {
   try {
     const { email, password, role: claimedRole, adminSecretCode } = req.body;
 
-    const user = await User.findOne({ email: email?.toLowerCase() });
+    if (typeof email !== "string" || typeof password !== "string")
+      return res.status(400).json({ message: "Invalid email or password" });
+    const user = await User.findOne({ email: email.trim().toLowerCase() });
     if (!user) return res.status(400).json({ message: "Invalid email or password" });
 
     const isMatch = await bcrypt.compare(password, user.password);
@@ -135,14 +125,12 @@ router.post("/login", async (req, res) => {
 
       // Must provide correct secret code (second factor)
       const correctCode = process.env.ADMIN_SECRET_CODE;
-      if (!adminSecretCode?.trim() || adminSecretCode.trim() !== correctCode) {
+      if (typeof adminSecretCode !== "string" || !correctCode || adminSecretCode.trim() !== correctCode) {
         return res.status(403).json({ message: "Invalid authority verification code. Access denied." });
       }
 
-      // Auto-approve existing admins (legacy accounts created before approval system)
       if (!user.isApproved) {
-        user.isApproved = true;
-        await user.save();
+        return res.status(403).json({ message: "Your official account is pending approval." });
       }
     }
 
@@ -218,7 +206,7 @@ router.put("/change-password", auth, async (req, res) => {
 router.post("/verify-aadhaar", auth, async (req, res) => {
   try {
     const { aadhaarNumber } = req.body;
-    if (!aadhaarNumber || aadhaarNumber.replace(/\s/g, "").length !== 12)
+    if (typeof aadhaarNumber !== "string" || !/^\d{12}$/.test(aadhaarNumber.replace(/\s/g, "")))
       return res.status(400).json({ message: "Please enter a valid 12-digit Aadhaar number" });
 
     const user = await User.findById(req.user.id);
@@ -235,30 +223,12 @@ router.post("/verify-aadhaar", auth, async (req, res) => {
   }
 });
 
-// ── POST /admin/self-approve — One-time: approve yourself if you're the only admin ──
-router.post("/admin/self-approve", async (req, res) => {
-  try {
-    const { email, adminSecretCode } = req.body;
-    if (adminSecretCode !== process.env.ADMIN_SECRET_CODE)
-      return res.status(403).json({ message: "Invalid code" });
-    const user = await User.findOneAndUpdate(
-      { email: email.toLowerCase(), role: "admin" },
-      { isApproved: true },
-      { new: true }
-    );
-    if (!user) return res.status(404).json({ message: "Admin user not found" });
-    res.json({ message: `${user.name} approved successfully. You can now log in.` });
-  } catch (err) {
-    res.status(500).json({ message: "Server error" });
-  }
-});
-
 // ── POST /admin/approve/:id — Approve a pending admin account ─────────────────
 router.post("/admin/approve/:id", auth, async (req, res) => {
   if (req.user.role !== "admin")
     return res.status(403).json({ message: "Only admins can approve accounts" });
   try {
-    const target = await User.findById(req.params.id);
+    const target = await User.findById(req.params.id).select("-password");
     if (!target) return res.status(404).json({ message: "User not found" });
     if (target.role !== "admin")
       return res.status(400).json({ message: "Only admin accounts need approval" });

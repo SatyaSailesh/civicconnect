@@ -1,29 +1,42 @@
 const express = require("express");
 const router = express.Router();
-const path = require("path");
 const Complaint = require("../models/Complaint");
 const User = require("../models/User");
 const auth = require("../middleware/authMiddleware");
 const upload = require("../middleware/uploadMiddleware");
 const { notifyStatusUpdate } = require("../jobs/emailService");
 
+const PUBLIC_FIELDS = "complaintId title description category location city status priority escalationLevel adminFeedback images rating ratingComment isPublic createdAt user";
+
 const AUTHORITY_LEVELS = ["", "Local Office", "Municipal Officer", "Legislative Assembly", "Chief Minister"];
 
 // ── POST / — Create Complaint (with image upload) ─────────────────────────────
-router.post("/", auth, upload.array("images", 2), async (req, res) => {
+async function verifiedCitizen(req, res, next) {
+    if (req.user.role !== "citizen") return res.status(403).json({ message: "Only citizens can submit complaints" });
     try {
-        const { title, description, category, location, city, district, state, pincode, lat, lng, priority } = req.body;
-        const locationStr = location || [city, district, state].filter(Boolean).join(", ") || "Not specified";
+        const citizen = await User.findById(req.user.id).select("name aadhaarVerified");
+        if (!citizen?.aadhaarVerified)
+            return res.status(403).json({ message: "Verify your demo Aadhaar before submitting a complaint" });
+        req.citizen = citizen;
+        next();
+    } catch (error) {
+        next(error);
+    }
+}
 
-        if (!title || !description || !category || !locationStr) {
+router.post("/", auth, verifiedCitizen, upload.array("images", 2), async (req, res) => {
+    try {
+        const { title, description, category, location, city, district, state, pincode, lat, lng, priority, isPublic } = req.body;
+        const locationStr = location || [city, district, state].filter(Boolean).join(", ");
+
+        if (![title, description, category, locationStr].every(value => typeof value === "string" && value.trim())) {
             return res.status(400).json({ message: "title, description, category and location are required" });
         }
 
         // Build image URLs from uploaded files
         const images = (req.files || []).map(f => f.path); // Cloudinary returns full URL in f.path
 
-        const citizen = await User.findById(req.user.id);
-        const performedBy = citizen ? citizen.name : "Citizen";
+        const performedBy = req.citizen.name;
 
         const complaint = new Complaint({
             user: req.user.id, title, description, category,
@@ -31,6 +44,7 @@ router.post("/", auth, upload.array("images", 2), async (req, res) => {
             lat: lat ? Number(lat) : null,
             lng: lng ? Number(lng) : null,
             priority: priority || "Normal",
+            isPublic: isPublic === true || isPublic === "true",
             images,
             history: [{
                 action: "Created",
@@ -43,8 +57,9 @@ router.post("/", auth, upload.array("images", 2), async (req, res) => {
         const saved = await complaint.save();
         res.status(201).json(saved);
     } catch (err) {
+        if (err.name === "ValidationError") return res.status(400).json({ message: "Invalid complaint data" });
         console.error("Create complaint error:", err.message);
-        res.status(500).json({ message: "Server error", error: err.message });
+        res.status(500).json({ message: "Server error" });
     }
 });
 
@@ -59,7 +74,7 @@ router.get("/my", auth, async (req, res) => {
 // ── GET / — Public complaints ─────────────────────────────────────────────────
 router.get("/", async (req, res) => {
     try {
-        const complaints = await Complaint.find({ isPublic: true })
+        const complaints = await Complaint.find({ isPublic: true }).select(PUBLIC_FIELDS)
             .populate({ path: "user", select: "name -_id" })
             .sort({ createdAt: -1 });
         res.json(complaints);
@@ -80,19 +95,23 @@ router.get("/admin", auth, async (req, res) => {
 // ── GET /track/:trackingId — Fetch complaint by tracking ID ────────────────────
 router.get("/track/:trackingId", auth, async (req, res) => {
     try {
-        const complaint = await Complaint.findOne({ complaintId: req.params.trackingId })
-            .populate("user", "name email aadhaarVerified")
-            .populate("messages.sender", "name role");
-        
-        if (!complaint) {
-            return res.status(404).json({ message: "Complaint with this Tracking ID does not exist" });
+        const complaint = await Complaint.findOne({ complaintId: req.params.trackingId.toUpperCase() });
+        if (!complaint) return res.status(404).json({ message: "Complaint with this Tracking ID does not exist" });
+
+        const isOwner = complaint.user.toString() === req.user.id;
+        if (req.user.role !== "admin" && !isOwner) {
+            if (!complaint.isPublic) return res.status(403).json({ message: "Access denied to private complaint" });
+            const summary = await Complaint.findOne({ _id: complaint._id, isPublic: true })
+                .select(PUBLIC_FIELDS)
+                .populate({ path: "user", select: "name -_id" });
+            if (!summary) return res.status(404).json({ message: "Complaint not found" });
+            return res.json(summary);
         }
 
-        // Authorization check: Admins can access all. Citizens can only access if it's their own or if it's public.
-        const isOwner = complaint.user._id.toString() === req.user.id;
-        if (req.user.role !== "admin" && !isOwner && !complaint.isPublic) {
-            return res.status(403).json({ message: "Access denied to private complaint" });
-        }
+        await complaint.populate([
+            { path: "user", select: "name email aadhaarVerified" },
+            { path: "messages.sender", select: "name role" },
+        ]);
 
         res.json(complaint);
     } catch (err) {
@@ -108,7 +127,7 @@ router.get("/:id", auth, async (req, res) => {
             .populate("user", "name email aadhaarVerified")
             .populate("messages.sender", "name role");
         if (!complaint) return res.status(404).json({ message: "Not found" });
-        const isOwner = complaint.user._id.toString() === req.user.id;
+        const isOwner = complaint.user?._id.toString() === req.user.id;
         if (!isOwner && req.user.role !== "admin") return res.status(403).json({ message: "Access denied" });
         res.json(complaint);
     } catch (err) { res.status(500).json({ message: "Server error" }); }
@@ -205,8 +224,12 @@ router.post("/:id/escalate", auth, async (req, res) => {
     if (req.user.role !== "admin") return res.status(403).json({ message: "Admins only" });
     try {
         const { reason } = req.body;
+        if (typeof reason !== "string" || !reason.trim())
+            return res.status(400).json({ message: "An escalation reason is required" });
         const complaint = await Complaint.findById(req.params.id).populate("user", "name email aadhaarVerified");
         if (!complaint) return res.status(404).json({ message: "Not found" });
+        if (["Resolved", "Rejected"].includes(complaint.status))
+            return res.status(400).json({ message: "Only open complaints can be escalated" });
         if (complaint.escalationLevel >= 4) return res.status(400).json({ message: "Already at maximum escalation level" });
 
         const newLevel = complaint.escalationLevel + 1;
@@ -298,7 +321,7 @@ Government Grievance Redressal System
         res.json({ complaint: updated, letter });
     } catch (err) {
         console.error("Escalation error:", err.message);
-        res.status(500).json({ message: "Server error", error: err.message });
+        res.status(500).json({ message: "Server error" });
     }
 });
 
@@ -306,7 +329,7 @@ Government Grievance Redressal System
 router.post("/:id/message", auth, async (req, res) => {
     try {
         const { text } = req.body;
-        if (!text?.trim()) return res.status(400).json({ message: "Message text required" });
+        if (typeof text !== "string" || !text.trim()) return res.status(400).json({ message: "Message text required" });
 
         const complaint = await Complaint.findById(req.params.id);
         if (!complaint) return res.status(404).json({ message: "Not found" });
@@ -321,10 +344,10 @@ router.post("/:id/message", auth, async (req, res) => {
 
         const message = { sender: req.user.id, senderRole: req.user.role, text: text.trim() };
         complaint.messages.push(message);
+        const added = complaint.messages.at(-1);
         await complaint.save();
-
-        const updated = await Complaint.findById(req.params.id).populate("messages.sender", "name role");
-        res.json(updated.messages[updated.messages.length - 1]);
+        await complaint.populate("messages.sender", "name role");
+        res.json(complaint.messages.id(added._id));
     } catch (err) {
         res.status(500).json({ message: "Server error" });
     }
