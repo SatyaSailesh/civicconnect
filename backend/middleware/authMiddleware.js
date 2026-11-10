@@ -1,14 +1,26 @@
 const jwt = require("jsonwebtoken");
+const User = require("../models/User");
 
-module.exports = (req, res, next) => {
-  const token = req.header("Authorization");
-  if (!token) return res.status(401).json({ message: "No token, authorization denied" });
+module.exports = async (req, res, next) => {
+  const match = /^Bearer (\S+)$/i.exec(req.header("Authorization") || "");
+  if (!match) return res.status(401).json({ message: "No token, authorization denied" });
+
+  let decoded;
+  try {
+    decoded = jwt.verify(match[1], process.env.JWT_SECRET);
+  } catch {
+    return res.status(401).json({ message: "Token is not valid" });
+  }
 
   try {
-    const decoded = jwt.verify(token.split(" ")[1], process.env.JWT_SECRET);
-    req.user = decoded;
+    const user = await User.findById(decoded.id).select("role isApproved");
+    if (!user) return res.status(401).json({ message: "Account not found" });
+    if (user.role === "admin" && !user.isApproved)
+      return res.status(403).json({ message: "Your official account is pending approval." });
+
+    req.user = { id: user.id, role: user.role };
     next();
-  } catch (err) {
-    res.status(401).json({ message: "Token is not valid" });
+  } catch (error) {
+    next(error);
   }
 };

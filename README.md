@@ -59,83 +59,75 @@ The platform focuses on transparency, accountability, and improved communication
 ## Project Structure
 
 ```
-civicconnect-project/
+civicconnect/
 │
 ├── frontend/
 ├── backend/
 ├── README.md
-└── .env
+└── .env.example
 ```
 
 ---
 
-## Installation
+## Run locally
 
-### Clone Repository
+Use Node.js 22.12 or newer and a running local MongoDB or a MongoDB Atlas connection.
 
 ```bash
-git clone <repository-url>
-cd civicconnect-project
+git clone https://github.com/SatyaSailesh/civicconnect.git
+cd civicconnect
 ```
 
-### Backend
+Copy `.env.example` to `backend/.env`. Set `MONGO_URI` and generate a private `JWT_SECRET` with `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`.
+
+Start the backend and frontend in separate terminals.
 
 ```bash
 cd backend
-npm install
+npm ci
 npm run dev
 ```
-
-### Frontend
 
 ```bash
 cd frontend
-npm install
+npm ci
 npm run dev
 ```
 
----
+Open [the web app](http://localhost:5173). Check [backend health](http://localhost:5000/health) if the app cannot connect.
 
-## Environment Variables
+### Try the citizen and official workflows
 
-Create a `.env` file inside the backend directory.
+1. Set `AADHAAR_WHITELIST=citizen@example.test:000000000001` in `backend/.env` for a demo. Register that citizen and enter the synthetic code in the verification dialog before submitting a complaint. This feature compares synthetic codes to a local allowlist. Use test data only.
+2. Submit a complaint and find its tracking ID on the citizen dashboard. New complaints are private by default. Select the public feed checkbox when the complaint is intended for public viewing.
+3. Set `ADMIN_WHITELIST` to the official email addresses and set a private `ADMIN_SECRET_CODE` before registering an official. The backend reads these at startup.
+4. Register the first official and approve the account from the backend directory with `npm run approve-admin -- official@example.test`. The command uses your configured MongoDB connection.
+5. Sign in as the approved official, update the complaint status, and check the timeline from the citizen account. Approved officials can approve additional official accounts in the dashboard.
 
-```env
-MONGO_URI=
-JWT_SECRET=
-CLOUDINARY_CLOUD_NAME=
-CLOUDINARY_API_KEY=
-CLOUDINARY_API_SECRET=
-EMAIL_USER=
-EMAIL_PASS=
-```
+### Optional integrations and deployment
 
----
+- Configure all three `CLOUDINARY_*` variables to accept image uploads. Text complaints work with no Cloudinary account.
+- Set `EMAIL_USER` and `EMAIL_PASS` to enable Gmail notifications. Use a Gmail app password.
+- Set `FRONTEND_URL` on the backend to the deployed frontend origin. Set `VITE_API_URL` on the frontend to the deployed backend URL ending in `/api` before building.
+- Run `npm run build` from `frontend` to produce the production build.
 
-## Current Features
+## Verify and demo
 
-- User Authentication
-- Complaint Submission
-- Complaint Tracking ID
-- Complaint Activity Timeline
-- Interactive Complaint Maps
-- Dashboard Analytics
-- Public Feed
-- Admin Complaint Management
+Run `npm test` from `backend` with local MongoDB running. The test creates and removes a dedicated database. Set `TEST_MONGO_PORT` if your local instance uses a different port. GitHub Actions runs this test and the frontend production build on pull requests.
 
----
+For an interview demo, use two browser sessions:
+
+1. As a verified demo citizen, file a streetlight complaint and copy its tracking ID.
+2. As an approved official, find the complaint, open chat, and update the status to **Resolved**.
+3. Return to the citizen dashboard, search by tracking ID, show the activity timeline, and rate the resolution.
+4. Show the automated check and explain how the API limits access to private complaints and chat messages.
 
 ## Future Roadmap
 
-- Marker Clustering
-- Heatmap Visualization
-- Smart Filters
 - AI Complaint Assistant
 - Duplicate Complaint Detection
 - Real-time Notifications
 - Smart City Command Centre
-
----
 
 ## Contributors
 

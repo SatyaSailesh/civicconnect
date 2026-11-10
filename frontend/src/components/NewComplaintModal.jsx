@@ -42,6 +42,7 @@ export default function NewComplaintModal({ isOpen, onClose, onSuccess }) {
         pincode: '',
         lat: null,
         lng: null,
+        isPublic: false,
     });
     const [images, setImages] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -156,6 +157,7 @@ export default function NewComplaintModal({ isOpen, onClose, onSuccess }) {
             formData.append('district', form.district || '');
             formData.append('state', form.state || '');
             formData.append('pincode', form.pincode || '');
+            formData.append('isPublic', String(form.isPublic));
             if (form.lat) formData.append('lat', form.lat);
             if (form.lng) formData.append('lng', form.lng);
             // Append actual image files for multer
@@ -164,7 +166,7 @@ export default function NewComplaintModal({ isOpen, onClose, onSuccess }) {
             await api.post('/complaints', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' },
             });
-            setForm({ title: '', description: '', category: 'Infrastructure', exactAddress: '', street: '', city: '', district: '', state: '', pincode: '', lat: null, lng: null });
+            setForm({ title: '', description: '', category: 'Infrastructure', exactAddress: '', street: '', city: '', district: '', state: '', pincode: '', lat: null, lng: null, isPublic: false });
             setImages([]);
             setLocState('idle');
             onSuccess();
@@ -474,6 +476,13 @@ export default function NewComplaintModal({ isOpen, onClose, onSuccess }) {
                                 )}
                             </div>
                         </div>
+
+                        <label className="flex items-start gap-2 text-sm text-white/70">
+                            <input type="checkbox" checked={form.isPublic}
+                                onChange={event => setForm({ ...form, isPublic: event.target.checked })}
+                                className="mt-1 accent-emerald-500" />
+                            <span>Share on the public feed. Your name, complaint details, location, and photos will be visible.</span>
+                        </label>
 
                         {/* Actions */}
                         <div className="flex gap-3 pt-2 pb-1">

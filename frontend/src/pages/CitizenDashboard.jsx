@@ -226,7 +226,7 @@ export default function CitizenDashboard() {
         .filter(c => {
             const query = search.trim().toLowerCase();
             if (!query) return true;
-            return [c.title, c.description, c.category]
+            return [c.complaintId, c.title, c.description, c.category]
                 .some(value => value?.toLowerCase().includes(query));
         });
 

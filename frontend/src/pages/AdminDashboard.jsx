@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
@@ -559,7 +559,9 @@ export default function AdminDashboard() {
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [catFilter, setCatFilter] = useState('all');
-    const [activeTab, setActiveTab] = useState('complaints');
+    const [searchParams, setSearchParams] = useSearchParams();
+    const tab = searchParams.get('tab');
+    const activeTab = ['analytics', 'users', 'pending'].includes(tab) ? tab : 'complaints';
     const [selected, setSelected] = useState(null);
     const [escalating, setEscalating] = useState(null);
 
@@ -736,7 +738,7 @@ export default function AdminDashboard() {
                         { key: 'users', label: `Citizens (${users.length})` },
                         { key: 'pending', label: `Pending Approvals ${users.filter(u => u.role === 'admin' && !u.isApproved).length > 0 ? '🔴' : ''}(${users.filter(u => u.role === 'admin' && !u.isApproved).length})` },
                     ].map(t => (
-                        <button key={t.key} onClick={() => setActiveTab(t.key)}
+                        <button key={t.key} onClick={() => setSearchParams(t.key === 'complaints' ? {} : { tab: t.key })}
                             className="px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200"
                             style={{
                                 background: activeTab === t.key ? 'linear-gradient(135deg,#10b981,#3b82f6)' : 'transparent',

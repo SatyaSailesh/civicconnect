@@ -88,7 +88,6 @@ function FeedCard({ c, index }) {
                             <span>👤 {c.user?.name || 'Citizen'}</span>
                             <span>🕐 {timeAgo(c.createdAt)}</span>
                             {c.images?.length > 0 && <span>📸 {c.images.length} photo{c.images.length > 1 ? 's' : ''}</span>}
-                            {c.messages?.length > 0 && <span>💬 {c.messages.length}</span>}
                         </div>
                         {c.escalationLevel > 1 && (
                             <span className="text-[10px] font-semibold px-2 py-1 rounded-full flex items-center gap-1"
@@ -220,6 +219,7 @@ export default function PublicFeedPage() {
         .filter(c => c.isPublic !== false)
         .filter(c => {
             const ms = !search
+                || c.complaintId?.toLowerCase().includes(search.toLowerCase())
                 || c.title?.toLowerCase().includes(search.toLowerCase())
                 || c.description?.toLowerCase().includes(search.toLowerCase())
                 || c.location?.toLowerCase().includes(search.toLowerCase())

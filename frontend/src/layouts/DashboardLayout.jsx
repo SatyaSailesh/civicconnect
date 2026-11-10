@@ -36,8 +36,8 @@ export default function DashboardLayout({ children, search: searchValue, onSearc
         { name: 'My Profile', icon: Icons.profile, path: '/profile', citizenOnly: true },
         { name: 'Public Feed', icon: Icons.feed, path: '/feed' },
         ...(isAdmin ? [
-            { name: 'Analytics', icon: Icons.analytics, path: '/analytics' },
-            { name: 'Citizens', icon: Icons.users, path: '/admin/citizens' },
+            { name: 'Analytics', icon: Icons.analytics, path: '/admin?tab=analytics' },
+            { name: 'Citizens', icon: Icons.users, path: '/admin?tab=users' },
         ] : []),
         { name: 'Settings', icon: Icons.settings, path: '/settings' },
     ];
@@ -50,7 +50,7 @@ export default function DashboardLayout({ children, search: searchValue, onSearc
         else setSearch(value);
     };
 
-    const isActive = (path) => location.pathname === path;
+    const isActive = (path) => location.pathname + location.search === path;
 
     const NavItem = ({ item, collapsed }) => (
         <Link to={item.path} onClick={() => setMobileOpen(false)}
