@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion as Motion, AnimatePresence } from 'framer-motion';
 import api from '../services/api';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/auth';
 
 export default function AadhaarVerifyModal({ isOpen, onClose, onVerified }) {
     const [aadhaar, setAadhaar] = useState('');
@@ -23,6 +23,7 @@ export default function AadhaarVerifyModal({ isOpen, onClose, onVerified }) {
         setLoading(true);
         try {
             await api.post('/auth/verify-aadhaar', { aadhaarNumber: digits });
+            updateAadhaarVerification();
             setSuccess(true);
             setTimeout(() => { onVerified?.(); onClose(); }, 1500);
         } catch (err) {
@@ -41,18 +42,18 @@ export default function AadhaarVerifyModal({ isOpen, onClose, onVerified }) {
     return (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
             style={{ fontFamily: "'Syne','DM Sans',sans-serif" }}>
-            <motion.div initial={{ scale: 0.92, opacity: 0, y: 16 }} animate={{ scale: 1, opacity: 1, y: 0 }}
+            <Motion.div initial={{ scale: 0.92, opacity: 0, y: 16 }} animate={{ scale: 1, opacity: 1, y: 0 }}
                 exit={{ scale: 0.92, opacity: 0 }} transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
                 className="w-full max-w-sm rounded-3xl overflow-hidden"
                 style={{ background: 'rgba(10,16,30,0.97)', border: '1px solid rgba(255,255,255,0.1)' }}>
 
                 {/* Header */}
                 <div className="px-7 pt-7 pb-5 text-center">
-                    <motion.div animate={success ? { scale: [1, 1.2, 1] } : {}}
+                    <Motion.div animate={success ? { scale: [1, 1.2, 1] } : {}}
                         className="w-16 h-16 rounded-2xl mx-auto mb-5 flex items-center justify-center text-3xl"
                         style={{ background: success ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.12)', border: `1px solid ${success ? 'rgba(16,185,129,0.3)' : 'rgba(245,158,11,0.25)'}` }}>
                         {success ? '✅' : '🪪'}
-                    </motion.div>
+                    </Motion.div>
                     <h2 className="text-xl font-extrabold text-white mb-2">
                         {success ? 'Aadhaar Verified!' : 'Demo Aadhaar Verification'}
                     </h2>
@@ -67,13 +68,13 @@ export default function AadhaarVerifyModal({ isOpen, onClose, onVerified }) {
                     <form onSubmit={handleSubmit} className="px-7 pb-7 space-y-4">
                         <AnimatePresence>
                             {error && (
-                                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
+                                <Motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
                                     exit={{ opacity: 0, height: 0 }}
                                     className="flex items-start gap-2 p-3 rounded-2xl overflow-hidden"
                                     style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
                                     <span className="text-red-400 flex-shrink-0 mt-0.5">⚠</span>
                                     <p className="text-red-400 text-xs" style={{ fontFamily: "'DM Sans',sans-serif" }}>{error}</p>
-                                </motion.div>
+                                </Motion.div>
                             )}
                         </AnimatePresence>
 
@@ -103,22 +104,22 @@ export default function AadhaarVerifyModal({ isOpen, onClose, onVerified }) {
                                 style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)', fontFamily: "'DM Sans',sans-serif" }}>
                                 Cancel
                             </button>
-                            <motion.button type="submit" disabled={loading || aadhaar.replace(/\s/g, '').length !== 12}
+                            <Motion.button type="submit" disabled={loading || aadhaar.replace(/\s/g, '').length !== 12}
                                 whileTap={{ scale: 0.97 }}
                                 className="flex-[2] py-3 rounded-2xl text-sm font-bold relative overflow-hidden group disabled:opacity-50 disabled:cursor-not-allowed">
                                 <span className="absolute inset-0 bg-gradient-to-r from-emerald-500 to-blue-600" />
                                 <span className="absolute inset-0 bg-gradient-to-r from-blue-600 to-purple-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                                 <span className="relative z-10 flex items-center justify-center gap-2 text-white">
                                     {loading ? (
-                                        <><motion.span animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 0.8, ease: 'linear' }}
+                                        <><Motion.span animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 0.8, ease: 'linear' }}
                                             className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full inline-block" /> Verifying…</>
                                     ) : 'Verify Aadhaar →'}
                                 </span>
-                            </motion.button>
+                            </Motion.button>
                         </div>
                     </form>
                 )}
-            </motion.div>
+            </Motion.div>
         </div>
     );
 }

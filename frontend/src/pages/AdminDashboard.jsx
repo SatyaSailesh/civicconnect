@@ -1,7 +1,8 @@
+import { complaintsToCsv } from '../services/csv';
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useAuth } from '../context/auth';
+import { motion as Motion, AnimatePresence } from 'framer-motion';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import api from '../services/api';
 import InteractiveMap from '../components/InteractiveMap';
@@ -46,7 +47,7 @@ function timeAgo(d) {
 // ─── Stat Card ────────────────────────────────────────────────────────────────
 function StatCard({ label, value, color, sub, icon, delay = 0 }) {
     return (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay, duration: 0.5 }}
+        <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay, duration: 0.5 }}
             whileHover={{ y: -3 }} className="relative group rounded-2xl p-6 cursor-default overflow-hidden"
             style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
             <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
@@ -61,7 +62,7 @@ function StatCard({ label, value, color, sub, icon, delay = 0 }) {
             </div>
             <p className="text-4xl font-extrabold text-white tracking-tight mb-1">{value}</p>
             <p className="text-sm text-white/40" style={{ fontFamily: "'DM Sans',sans-serif" }}>{label}</p>
-        </motion.div>
+        </Motion.div>
     );
 }
 
@@ -124,7 +125,7 @@ function EscalateModal({ complaint, onClose, onEscalated }) {
     return (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
             style={{ fontFamily: "'Syne','DM Sans',sans-serif" }} onClick={onClose}>
-            <motion.div initial={{ scale: 0.94, opacity: 0, y: 16 }} animate={{ scale: 1, opacity: 1, y: 0 }}
+            <Motion.div initial={{ scale: 0.94, opacity: 0, y: 16 }} animate={{ scale: 1, opacity: 1, y: 0 }}
                 transition={{ duration: 0.28 }} className="w-full max-w-lg rounded-3xl overflow-hidden"
                 style={{ background: 'rgba(10,16,30,0.97)', border: '1px solid rgba(255,255,255,0.1)', maxHeight: '90vh', overflowY: 'auto' }}
                 onClick={e => e.stopPropagation()}>
@@ -172,17 +173,17 @@ function EscalateModal({ complaint, onClose, onEscalated }) {
                                 <p className="text-xs text-white/25" style={{ fontFamily: "'DM Sans',sans-serif" }}>
                                     📄 A formal government-style letter will be auto-generated and attached to this complaint.
                                 </p>
-                                <motion.button whileTap={{ scale: 0.97 }} onClick={handleEscalate}
+                                <Motion.button whileTap={{ scale: 0.97 }} onClick={handleEscalate}
                                     disabled={saving || !reason.trim()}
                                     className="w-full py-3.5 rounded-2xl font-bold text-sm relative overflow-hidden group disabled:opacity-50">
                                     <span className="absolute inset-0 bg-gradient-to-r from-red-500 to-orange-500" />
                                     <span className="relative z-10 flex items-center justify-center gap-2 text-white">
                                         {saving
-                                            ? <><motion.span animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 0.8, ease: 'linear' }}
+                                            ? <><Motion.span animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 0.8, ease: 'linear' }}
                                                 className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full" />Escalating…</>
                                             : <>🔺 Escalate to {toAuth}</>}
                                     </span>
-                                </motion.button>
+                                </Motion.button>
                             </>
                         )}
                     </div>
@@ -207,6 +208,7 @@ function EscalateModal({ complaint, onClose, onEscalated }) {
                                 a.href = URL.createObjectURL(blob);
                                 a.download = `escalation-${complaint.complaintId || complaint._id.slice(-6)}.txt`;
                                 a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
                             }} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-semibold"
                                 style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)', color: '#10b981', fontFamily: "'DM Sans',sans-serif" }}>
                                 <Icon.download className="w-4 h-4" /> Download Letter
@@ -218,13 +220,13 @@ function EscalateModal({ complaint, onClose, onEscalated }) {
                         </div>
                     </div>
                 )}
-            </motion.div>
+            </Motion.div>
         </div>
     );
 }
 
 // ─── Update + Message Modal ───────────────────────────────────────────────────
-function DetailModal({ complaint: initialComplaint, onClose, onSave }) {
+function DetailModal({ complaint: initialComplaint, onClose, onSave, onRecord }) {
     const [complaint, setComplaint] = useState(initialComplaint);
     const [tab, setTab] = useState('update'); // update | images | messages | letter
     const [status, setStatus] = useState(initialComplaint.status);
@@ -234,12 +236,41 @@ function DetailModal({ complaint: initialComplaint, onClose, onSave }) {
     const [saving, setSaving] = useState(false);
     const [sending, setSending] = useState(false);
     const [galleryOpen, setGalleryOpen] = useState(false);
+    const [saveError, setSaveError] = useState('');
+    const [togglingChat, setTogglingChat] = useState(false);
+    const [department, setDepartment] = useState(initialComplaint.assignedDepartment || '');
+    const [jurisdiction, setJurisdiction] = useState(initialComplaint.jurisdiction || '');
+    const isWithdrawn = complaint.status === 'Withdrawn';
+    useEffect(() => {
+        let active = true;
+        const refresh = async () => {
+            try {
+                const { data } = await api.get(`/complaints/${initialComplaint._id}`);
+                if (active) setComplaint(data);
+            } catch (error) {
+                if (active) setSaveError(error.response?.data?.message || 'Could not refresh the complaint. Reopen it to retry.');
+            }
+        };
+        refresh();
+        const interval = tab === 'messages' ? setInterval(refresh, 8000) : null;
+        return () => { active = false; if (interval) clearInterval(interval); };
+    }, [initialComplaint._id, tab]);
+    async function toggleChat() {
+        setTogglingChat(true);
+        setSaveError('');
+        try {
+            const { data } = await api.post(`/complaints/${complaint._id}/toggle-chat`);
+            setComplaint(previous => ({ ...previous, chatEnabled: data.chatEnabled }));
+        } catch (error) { setSaveError(error.response?.data?.message || 'Could not change chat availability.'); }
+        finally { setTogglingChat(false); }
+    }
 
     const handleSave = async () => {
         setSaving(true);
-        await onSave(complaint._id, status, feedback, priority);
-        setSaving(false);
-        onClose();
+        setSaveError('');
+        try { await onSave(complaint._id, status, feedback, priority, complaint.__v); onClose(); }
+        catch (err) { setSaveError(err.response?.data?.message || 'Update failed. Please retry.'); }
+        finally { setSaving(false); }
     };
 
     const handleSendMessage = async () => {
@@ -250,7 +281,7 @@ function DetailModal({ complaint: initialComplaint, onClose, onSave }) {
             const { data } = await api.get(`/complaints/${complaint._id}`);
             setComplaint(data);
             setMessage('');
-        } catch (err) { alert('Failed to send message'); }
+        } catch { alert('Failed to send message'); }
         finally { setSending(false); }
     };
 
@@ -264,11 +295,12 @@ function DetailModal({ complaint: initialComplaint, onClose, onSave }) {
     return (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
             style={{ fontFamily: "'Syne','DM Sans',sans-serif" }} onClick={onClose}>
-            <motion.div initial={{ scale: 0.94, opacity: 0, y: 16 }} animate={{ scale: 1, opacity: 1, y: 0 }}
+            <Motion.div initial={{ scale: 0.94, opacity: 0, y: 16 }} animate={{ scale: 1, opacity: 1, y: 0 }}
                 className="w-full max-w-xl rounded-3xl overflow-hidden"
                 style={{ background: 'rgba(10,16,30,0.97)', border: '1px solid rgba(255,255,255,0.1)', maxHeight: '92vh', overflowY: 'auto' }}
                 onClick={e => e.stopPropagation()}>
 
+                {saveError && <p role="alert" className="p-4 text-red-300">{saveError}</p>}
                 {/* Header */}
                 <div className="px-7 py-5 flex items-center justify-between sticky top-0 z-10"
                     style={{ background: 'rgba(10,16,30,0.97)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
@@ -283,6 +315,7 @@ function DetailModal({ complaint: initialComplaint, onClose, onSave }) {
                                 }}>
                                 {complaint.priority === 'Critical' ? '🔴' : complaint.priority === 'High' ? '🟠' : '⚪'} {complaint.priority || 'Normal'}
                             </span>
+                            {isWithdrawn && <span role="status" aria-label="Withdrawn complaint" className="text-xs px-2 py-0.5 rounded-full font-semibold text-white/55 bg-white/5">Withdrawn · history retained</span>}
                         </div>
                         <h3 className="text-lg font-extrabold text-white truncate max-w-xs">{complaint.title}</h3>
                     </div>
@@ -311,6 +344,14 @@ function DetailModal({ complaint: initialComplaint, onClose, onSave }) {
                     {/* ── Update Tab ── */}
                     {tab === 'update' && (
                         <div className="space-y-4">
+                            <section className="space-y-2 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                                <h4 className="text-sm font-semibold text-white">Department routing</h4>
+                                <p className="text-xs text-white/45">{complaint.routingStatus === 'review' ? 'Unmatched report · admin review queue' : `Current: ${complaint.assignedDepartment || 'Review Queue'} · ${complaint.jurisdiction || 'No jurisdiction'}`}</p>
+                                <input aria-label="Department" value={department} onChange={e => setDepartment(e.target.value)} placeholder="Department" className="w-full rounded-lg bg-white/5 p-2 text-sm text-white" />
+                                <input aria-label="Jurisdiction" value={jurisdiction} onChange={e => setJurisdiction(e.target.value)} placeholder="Jurisdiction / area" className="w-full rounded-lg bg-white/5 p-2 text-sm text-white" />
+                                <button disabled={saving || isWithdrawn || !department.trim() || !jurisdiction.trim()} onClick={async () => { setSaving(true); setSaveError(''); try { const { data } = await api.patch(`/complaints/${complaint._id}/assignment`, { department, jurisdiction, version: complaint.__v }); setComplaint(data); onRecord?.(data); } catch (error) { setSaveError(error.response?.data?.message || 'Could not assign department.'); } finally { setSaving(false); } }} className="rounded-lg bg-emerald-500/20 px-3 py-2 text-xs text-emerald-200 disabled:opacity-50">Assign / reassign</button>
+                            </section>
+                            {complaint.correctionRequests?.filter(item => item.status === 'pending').map(item => <section key={item._id} className="rounded-2xl border border-blue-400/20 bg-blue-500/5 p-4 space-y-2"><h4 className="text-sm font-semibold text-blue-200">Citizen correction request</h4><p className="text-xs text-white/65">{item.message}</p><p className="text-xs text-white/45">{isWithdrawn ? 'This complaint is withdrawn; the request is read-only.' : 'Approving records the decision in the timeline; it does not change complaint details.'}</p><div className="flex gap-2">{['accepted', 'declined'].map(decision => <button key={decision} disabled={saving || isWithdrawn} onClick={async () => { setSaving(true); setSaveError(''); try { const { data } = await api.patch(`/complaints/${complaint._id}/corrections/${item._id}`, { status: decision, version: complaint.__v }); setComplaint(data); onRecord?.(data); } catch (error) { setSaveError(error.response?.data?.message || 'Could not review correction.'); } finally { setSaving(false); } }} className="rounded-lg bg-white/5 px-3 py-2 text-xs text-white/80 disabled:opacity-50">{decision === 'accepted' ? 'Approve request' : 'Reject request'}</button>)}</div></section>)}
                             {/* Citizen */}
                             <div className="flex items-center gap-3 p-3 rounded-2xl"
                                 style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
@@ -352,7 +393,7 @@ function DetailModal({ complaint: initialComplaint, onClose, onSave }) {
                                     style={{ fontFamily: "'DM Sans',sans-serif" }}>Priority</label>
                                 <div className="flex gap-2">
                                     {['Normal', 'High', 'Critical'].map(p => (
-                                        <button key={p} onClick={() => setPriority(p)}
+                                        <button key={p} disabled={isWithdrawn} onClick={() => setPriority(p)}
                                             className="flex-1 py-2 rounded-xl text-xs font-semibold transition-all"
                                             style={{
                                                 background: priority === p ? PRIORITY_CFG[p].bg : 'rgba(255,255,255,0.03)',
@@ -372,7 +413,7 @@ function DetailModal({ complaint: initialComplaint, onClose, onSave }) {
                                     style={{ fontFamily: "'DM Sans',sans-serif" }}>Status</label>
                                 <div className="grid grid-cols-2 gap-2">
                                     {Object.entries(STATUS_CFG).map(([s, cfg]) => (
-                                        <button key={s} onClick={() => setStatus(s)}
+                                        <button key={s} disabled={isWithdrawn} onClick={() => setStatus(s)}
                                             className="py-2.5 px-3 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all"
                                             style={{
                                                 background: status === s ? cfg.bg : 'rgba(255,255,255,0.03)',
@@ -397,17 +438,17 @@ function DetailModal({ complaint: initialComplaint, onClose, onSave }) {
                                     style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', fontFamily: "'DM Sans',sans-serif" }} />
                             </div>
 
-                            <motion.button whileTap={{ scale: 0.97 }} onClick={handleSave} disabled={saving}
+                            <Motion.button whileTap={{ scale: 0.97 }} onClick={handleSave} disabled={saving || isWithdrawn}
                                 className="w-full py-3.5 rounded-2xl font-bold text-sm relative overflow-hidden group disabled:opacity-60">
                                 <span className="absolute inset-0 bg-gradient-to-r from-emerald-500 to-blue-600" />
                                 <span className="absolute inset-0 bg-gradient-to-r from-blue-600 to-purple-600 opacity-0 group-hover:opacity-100 transition-opacity" />
                                 <span className="relative z-10 flex items-center justify-center gap-2 text-white">
                                     {saving
-                                        ? <><motion.span animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 0.8, ease: 'linear' }}
+                                        ? <><Motion.span animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 0.8, ease: 'linear' }}
                                             className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full" />Saving…</>
-                                        : <><Icon.send className="w-4 h-4" /> Save & Notify Citizen</>}
+                                        : <><Icon.send className="w-4 h-4" /> Save Changes</>}
                                 </span>
-                            </motion.button>
+                            </Motion.button>
                         </div>
                     )}
 
@@ -426,7 +467,7 @@ function DetailModal({ complaint: initialComplaint, onClose, onSave }) {
                                     </p>
                                     <div className="grid grid-cols-2 gap-3">
                                         {complaint.images.map((img, i) => (
-                                            <motion.div key={i} whileHover={{ scale: 1.02 }} onClick={() => { setGalleryOpen(true); }}
+                                            <Motion.div key={i} whileHover={{ scale: 1.02 }} onClick={() => { setGalleryOpen(true); }}
                                                 className="relative aspect-video rounded-2xl overflow-hidden cursor-pointer"
                                                 style={{ border: '1px solid rgba(255,255,255,0.1)' }}>
                                                 <img src={img} alt={`Evidence ${i + 1}`}
@@ -439,7 +480,7 @@ function DetailModal({ complaint: initialComplaint, onClose, onSave }) {
                                                 </div>
                                                 <div className="absolute bottom-2 left-2 text-[10px] text-white/60 px-1.5 py-0.5 rounded"
                                                     style={{ background: 'rgba(0,0,0,0.5)' }}>Photo {i + 1}</div>
-                                            </motion.div>
+                                            </Motion.div>
                                         ))}
                                     </div>
                                     <button onClick={() => setGalleryOpen(true)}
@@ -458,6 +499,10 @@ function DetailModal({ complaint: initialComplaint, onClose, onSave }) {
                     {/* ── Messages Tab ── */}
                     {tab === 'messages' && (
                         <div className="space-y-4">
+                            <button onClick={toggleChat} disabled={togglingChat || isWithdrawn} className="px-4 py-2 rounded-xl bg-emerald-500/20 text-emerald-300 disabled:opacity-50">
+                                {togglingChat ? 'Updating chat…' : complaint.chatEnabled ? 'Close citizen chat' : 'Open citizen chat'}
+                            </button>
+                            <p className="text-xs text-white/60">{complaint.chatEnabled ? 'The citizen can reply in this private thread.' : 'Open chat to allow the citizen to reply.'}</p>
                             <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
                                 {(!complaint.messages || complaint.messages.length === 0) ? (
                                     <p className="text-center text-white/30 text-sm py-8" style={{ fontFamily: "'DM Sans',sans-serif" }}>
@@ -487,11 +532,11 @@ function DetailModal({ complaint: initialComplaint, onClose, onSave }) {
                                     placeholder="Type a message to citizen..."
                                     className="flex-1 px-4 py-3 rounded-2xl text-sm text-white outline-none"
                                     style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', fontFamily: "'DM Sans',sans-serif" }} />
-                                <motion.button whileTap={{ scale: 0.9 }} onClick={handleSendMessage} disabled={sending || !message.trim()}
+                                <Motion.button whileTap={{ scale: 0.9 }} onClick={handleSendMessage} disabled={sending || !message.trim()}
                                     className="w-12 h-12 rounded-2xl flex items-center justify-center disabled:opacity-50"
                                     style={{ background: 'linear-gradient(135deg,#10b981,#3b82f6)' }}>
                                     <Icon.send className="w-4 h-4 text-white" />
-                                </motion.button>
+                                </Motion.button>
                             </div>
                         </div>
                     )}
@@ -533,7 +578,7 @@ function DetailModal({ complaint: initialComplaint, onClose, onSave }) {
                         </div>
                     )}
                 </div>
-            </motion.div>
+            </Motion.div>
 
             {galleryOpen && (
                 <div style={{ position: 'fixed', inset: 0, zIndex: 9999 }}>
@@ -557,19 +602,22 @@ export default function AdminDashboard() {
     });
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
+    const [error, setError] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [catFilter, setCatFilter] = useState('all');
+    const [routingFilter, setRoutingFilter] = useState('all');
     const [searchParams, setSearchParams] = useSearchParams();
     const tab = searchParams.get('tab');
     const activeTab = ['analytics', 'users', 'pending'].includes(tab) ? tab : 'complaints';
     const [selected, setSelected] = useState(null);
     const [escalating, setEscalating] = useState(null);
 
-    useEffect(() => { if (user && user.role !== 'admin') navigate('/citizen'); }, [user]);
+    useEffect(() => { if (user && user.role !== 'admin') navigate('/citizen'); }, [user, navigate]);
     useEffect(() => { fetchAll(); }, []);
 
     const fetchAll = async () => {
         try {
+            setError('');
             setLoading(true);
             const [cRes, uRes, dRes] = await Promise.all([
                 api.get('/complaints/admin'),
@@ -579,7 +627,7 @@ export default function AdminDashboard() {
             setComplaints(cRes.data);
             setUsers(uRes.data);
             setDashboardStats(dRes.data);
-        } catch (err) { console.error(err); }
+        } catch (err) { setError(err.response?.data?.message || 'Could not load dashboard data. Please retry.'); }
         finally { setLoading(false); }
     };
 
@@ -587,15 +635,14 @@ export default function AdminDashboard() {
         try {
             const { data } = await api.get('/dashboard/admin');
             setDashboardStats(data);
-        } catch (err) { console.error(err); }
+        } catch (err) { setError(err.response?.data?.message || 'Could not load dashboard data. Please retry.'); }
     };
 
-    const handleUpdate = async (id, status, adminFeedback, priority) => {
-        try {
-            const { data } = await api.put(`/complaints/${id}`, { status, adminFeedback, priority });
+    const handleUpdate = async (id, status, adminFeedback, priority, version) => {
+            const { data } = await api.put(`/complaints/${id}`, { status, adminFeedback, priority, version });
             setComplaints(prev => prev.map(c => c._id === id ? data : c));
             await refreshDashboardStats();
-        } catch (err) { console.error(err); }
+
     };
 
     const stats = {
@@ -629,17 +676,12 @@ export default function AdminDashboard() {
             || c.complaintId?.toLowerCase().includes(search.toLowerCase());
         const mSt = statusFilter === 'all' || c.status === statusFilter;
         const mCt = catFilter === 'all' || c.category === catFilter;
-        return ms && mSt && mCt;
+        const mRouting = routingFilter === 'all' || (routingFilter === 'review' ? c.routingStatus === 'review' : c.routingStatus !== 'review');
+        return ms && mSt && mCt && mRouting;
     });
 
     const exportCSV = () => {
-        const rows = [['ID', 'Title', 'Category', 'Status', 'Priority', 'Location', 'Citizen', 'Filed', 'Feedback']];
-        filtered.forEach(c => rows.push([
-            c.complaintId || c._id?.slice(-6), `"${c.title}"`, c.category, c.status, c.priority || 'Normal',
-            `"${c.location || ''}"`, `"${c.user?.name || ''}"`,
-            new Date(c.createdAt).toLocaleDateString('en-IN'), `"${c.adminFeedback || ''}"`
-        ]));
-        const csv = rows.map(r => r.join(',')).join('\n');
+        const csv = complaintsToCsv(filtered);
         const a = document.createElement('a');
         a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
         a.download = `civicconnect_${new Date().toISOString().split('T')[0]}.csv`;
@@ -653,13 +695,14 @@ export default function AdminDashboard() {
 
     if (loading) return (
         <div className="min-h-screen flex items-center justify-center" style={{ background: '#03070f' }}>
-            <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+            <Motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
                 className="w-10 h-10 border-2 border-white/10 border-t-emerald-400 rounded-full" />
         </div>
     );
 
     return (
-        <div className="min-h-screen" style={{ background: '#03070f', fontFamily: "'Syne','DM Sans',sans-serif" }}>
+        <div className="min-h-screen text-white" style={{ background: '#03070f', fontFamily: "'Syne','DM Sans',sans-serif" }}>
+            {error && <div role="alert" className="p-4 text-red-300">{error} <button onClick={fetchAll}>Retry</button></div>}
             <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap');
         ::-webkit-scrollbar{width:4px;height:4px}
@@ -685,23 +728,23 @@ export default function AdminDashboard() {
                         <p className="text-[10px] text-white/30" style={{ fontFamily: "'DM Sans',sans-serif" }}>Authority Portal</p>
                     </div>
                 </div>
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full"
+                <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full"
                     style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                    <motion.span animate={{ opacity: [1, 0.3, 1] }} transition={{ repeat: Infinity, duration: 1.8 }}
+                    <Motion.span animate={{ opacity: [1, 0.3, 1] }} transition={{ repeat: Infinity, duration: 1.8 }}
                         className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
                     <span className="text-xs text-emerald-400 font-semibold">Admin: {user?.name?.split(' ')[0]}</span>
                 </div>
-                <motion.button whileTap={{ scale: 0.95 }} onClick={() => { logout(); navigate('/login'); }}
+                <Motion.button whileTap={{ scale: 0.95 }} onClick={() => { logout(); navigate('/login'); }}
                     className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm text-white/50 hover:text-white transition-colors"
                     style={{ fontFamily: "'DM Sans',sans-serif" }}>
                     <Icon.logout className="w-4 h-4" /> Logout
-                </motion.button>
+                </Motion.button>
             </nav>
 
             <div className="max-w-7xl mx-auto px-6 py-8 space-y-8">
 
                 {/* Header */}
-                <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }}>
+                <Motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }}>
                     <h1 className="text-3xl lg:text-4xl font-extrabold text-white tracking-tight mb-2">
                         Authority{' '}
                         <span style={{
@@ -712,7 +755,7 @@ export default function AdminDashboard() {
                     <p className="text-white/35 text-sm" style={{ fontFamily: "'DM Sans',sans-serif" }}>
                         Manage grievances · Escalate complaints · Track resolutions
                     </p>
-                </motion.div>
+                </Motion.div>
 
                 {/* Stats */}
                 <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
@@ -730,12 +773,12 @@ export default function AdminDashboard() {
                 </div>
 
                 {/* Tabs */}
-                <div className="flex items-center gap-2 p-1.5 rounded-2xl w-fit"
+                <div className="grid grid-cols-2 sm:flex items-center gap-2 p-1.5 rounded-2xl w-full sm:w-fit"
                     style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
                     {[
                         { key: 'complaints', label: `Complaints (${complaints.length})` },
                         { key: 'analytics', label: 'Analytics 📊' },
-                        { key: 'users', label: `Citizens (${users.length})` },
+                        { key: 'users', label: `Accounts (${users.length})` },
                         { key: 'pending', label: `Pending Approvals ${users.filter(u => u.role === 'admin' && !u.isApproved).length > 0 ? '🔴' : ''}(${users.filter(u => u.role === 'admin' && !u.isApproved).length})` },
                     ].map(t => (
                         <button key={t.key} onClick={() => setSearchParams(t.key === 'complaints' ? {} : { tab: t.key })}
@@ -754,7 +797,7 @@ export default function AdminDashboard() {
 
                     {/* ── COMPLAINTS TAB ── */}
                     {activeTab === 'complaints' && (
-                        <motion.div key="c" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+                        <Motion.div key="c" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
                             {/* Filters */}
                             <div className="flex flex-col lg:flex-row gap-3 mb-6">
                                 <div className="relative flex-1">
@@ -764,11 +807,12 @@ export default function AdminDashboard() {
                                         className="w-full pl-11 pr-4 py-3 rounded-2xl text-sm text-white placeholder-white/25 outline-none"
                                         style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', fontFamily: "'DM Sans',sans-serif" }} />
                                 </div>
-                                <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
-                                    className="px-4 py-3 rounded-2xl text-sm text-white outline-none cursor-pointer"
+                                <select aria-label="Filter complaints by status" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+                                    className="px-4 py-3 rounded-2xl text-sm text-white outline-none cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400"
                                     style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', fontFamily: "'DM Sans',sans-serif", minWidth: 160 }}>
                                     <option value="all" style={{ background: '#0d1825' }}>All Statuses</option>
                                     {Object.keys(STATUS_CFG).map(s => <option key={s} value={s} style={{ background: '#0d1825' }}>{s}</option>)}
+                                    <option value="Withdrawn" style={{ background: '#0d1825' }}>Withdrawn</option>
                                 </select>
                                 <select value={catFilter} onChange={e => setCatFilter(e.target.value)}
                                     className="px-4 py-3 rounded-2xl text-sm text-white outline-none cursor-pointer"
@@ -776,11 +820,18 @@ export default function AdminDashboard() {
                                     <option value="all" style={{ background: '#0d1825' }}>All Categories</option>
                                     {Object.keys(CAT_ICONS).map(c => <option key={c} value={c} style={{ background: '#0d1825' }}>{CAT_ICONS[c]} {c}</option>)}
                                 </select>
-                                <motion.button whileTap={{ scale: 0.97 }} onClick={exportCSV}
+                                <select aria-label="Department routing filter" value={routingFilter} onChange={e => setRoutingFilter(e.target.value)}
+                                    className="px-4 py-3 rounded-2xl text-sm text-white outline-none cursor-pointer"
+                                    style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', fontFamily: "'DM Sans',sans-serif", minWidth: 170 }}>
+                                    <option value="all" style={{ background: '#0d1825' }}>All Routing</option>
+                                    <option value="review" style={{ background: '#0d1825' }}>Admin Review Queue</option>
+                                    <option value="assigned" style={{ background: '#0d1825' }}>Routed / Assigned</option>
+                                </select>
+                                <Motion.button whileTap={{ scale: 0.97 }} onClick={exportCSV}
                                     className="flex items-center gap-2 px-5 py-3 rounded-2xl text-sm font-semibold whitespace-nowrap"
                                     style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.25)', color: '#10b981', fontFamily: "'DM Sans',sans-serif" }}>
                                     <Icon.download className="w-4 h-4" /> Export CSV
-                                </motion.button>
+                                </Motion.button>
                             </div>
 
                             <p className="text-xs text-white/25 mb-4" style={{ fontFamily: "'DM Sans',sans-serif" }}>
@@ -809,10 +860,12 @@ export default function AdminDashboard() {
                                         <p className="text-white/40 text-sm">No complaints match your filters</p>
                                     </div>
                                 ) : filtered.map((c, i) => {
-                                    const cfg = STATUS_CFG[c.status] || STATUS_CFG['Pending'];
+                                    const cfg = c.status === 'Withdrawn'
+                                        ? { color: '#9ca3af', bg: 'rgba(156,163,175,0.1)', border: 'rgba(156,163,175,0.25)' }
+                                        : STATUS_CFG[c.status] || STATUS_CFG['Pending'];
                                     const pcfg = PRIORITY_CFG[c.priority || 'Normal'];
                                     return (
-                                        <motion.div key={c._id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                                        <Motion.div key={c._id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
                                             transition={{ delay: i * 0.025 }}
                                             className="group grid grid-cols-2 lg:grid-cols-12 gap-3 items-center px-5 py-4 rounded-2xl transition-all"
                                             style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
@@ -821,7 +874,7 @@ export default function AdminDashboard() {
                                                 {c.complaintId || c._id?.slice(-4).toUpperCase()}
                                             </div>
                                             <div className="col-span-2 lg:col-span-3">
-                                                <p className="text-sm font-bold text-white truncate">{c.title}</p>
+                                        <button onClick={() => setSelected(c)} className="text-sm font-bold text-white text-left hover:underline">{c.title}</button>
                                                 <p className="text-[11px] text-white/30 truncate mt-0.5" style={{ fontFamily: "'DM Sans',sans-serif" }}>
                                                     {c.description?.slice(0, 50)}…
                                                 </p>
@@ -854,30 +907,30 @@ export default function AdminDashboard() {
                                             <div className="hidden lg:block col-span-1 text-[11px] text-white/30"
                                                 style={{ fontFamily: "'DM Sans',sans-serif" }}>{timeAgo(c.createdAt)}</div>
                                             <div className="col-span-1 lg:col-span-1 flex items-center gap-1.5">
-                                                <motion.button whileTap={{ scale: 0.9 }} onClick={() => setSelected(c)}
+                                                <Motion.button whileTap={{ scale: 0.9 }} onClick={() => setSelected(c)}
                                                     className="text-[11px] font-semibold px-2.5 py-1.5 rounded-xl"
                                                     style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)', color: '#10b981', fontFamily: "'DM Sans',sans-serif" }}>
                                                     Edit
-                                                </motion.button>
-                                                {c.escalationLevel < 4 && c.status !== 'Resolved' && (
-                                                    <motion.button whileTap={{ scale: 0.9 }} onClick={() => setEscalating(c)}
+                                                </Motion.button>
+                                                {c.escalationLevel < 4 && !['Resolved', 'Rejected', 'Withdrawn'].includes(c.status) && (
+                                                    <Motion.button whileTap={{ scale: 0.9 }} onClick={() => setEscalating(c)}
                                                         title="Escalate to higher authority"
                                                         className="text-[11px] font-semibold px-2.5 py-1.5 rounded-xl"
                                                         style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#ef4444', fontFamily: "'DM Sans',sans-serif" }}>
                                                         🔺
-                                                    </motion.button>
+                                                    </Motion.button>
                                                 )}
                                             </div>
-                                        </motion.div>
+                                        </Motion.div>
                                     );
                                 })}
                             </div>
-                        </motion.div>
+                        </Motion.div>
                     )}
 
                     {/* ── ANALYTICS TAB ── */}
                     {activeTab === 'analytics' && (
-                        <motion.div key="a" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                        <Motion.div key="a" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
                             className="space-y-6">
 
                             <div className="grid lg:grid-cols-2 gap-6">
@@ -972,7 +1025,7 @@ export default function AdminDashboard() {
                                         </p>
                                     </div>
                                     <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
-                                        <motion.div className="h-full rounded-full"
+                                        <Motion.div className="h-full rounded-full"
                                             initial={{ width: 0 }}
                                             animate={{ width: `${stats.total ? stats.resolved / stats.total * 100 : 0}%` }}
                                             transition={{ duration: 1.2, ease: 'easeOut' }}
@@ -980,15 +1033,15 @@ export default function AdminDashboard() {
                                     </div>
                                 </div>
                             </div>
-                        </motion.div>
+                        </Motion.div>
                     )}
 
                     {/* ── CITIZENS TAB ── */}
                     {activeTab === 'users' && (
-                        <motion.div key="u" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                        <Motion.div key="u" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
                             className="space-y-2">
                             {users.map((u, i) => (
-                                <motion.div key={u._id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                                <Motion.div key={u._id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
                                     transition={{ delay: i * 0.04 }}
                                     className="grid grid-cols-2 lg:grid-cols-12 gap-4 items-center px-5 py-4 rounded-2xl"
                                     style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
@@ -1024,13 +1077,13 @@ export default function AdminDashboard() {
                                         style={{ fontFamily: "'DM Sans',sans-serif" }}>
                                         {complaints.filter(c => c.user?._id === u._id || c.user === u._id).length} complaints
                                     </div>
-                                </motion.div>
+                                </Motion.div>
                             ))}
-                        </motion.div>
+                        </Motion.div>
                     )}
                     {/* ── PENDING APPROVALS TAB ── */}
                     {activeTab === 'pending' && (
-                        <motion.div key="p" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                        <Motion.div key="p" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
                             className="space-y-3">
                             {users.filter(u => u.role === 'admin' && !u.isApproved).length === 0 ? (
                                 <div className="text-center py-20 rounded-3xl"
@@ -1039,7 +1092,7 @@ export default function AdminDashboard() {
                                     <p className="text-white/40 text-sm">No pending admin approvals</p>
                                 </div>
                             ) : users.filter(u => u.role === 'admin' && !u.isApproved).map((u, i) => (
-                                <motion.div key={u._id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                                <Motion.div key={u._id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
                                     transition={{ delay: i * 0.06 }}
                                     className="flex items-center gap-4 px-5 py-4 rounded-2xl"
                                     style={{ background: 'rgba(245,158,11,0.04)', border: '1px solid rgba(245,158,11,0.15)' }}>
@@ -1054,7 +1107,7 @@ export default function AdminDashboard() {
                                             Registered {new Date(u.createdAt).toLocaleDateString('en-IN')} · Awaiting approval
                                         </p>
                                     </div>
-                                    <motion.button whileTap={{ scale: 0.95 }}
+                                    <Motion.button whileTap={{ scale: 0.95 }}
                                         onClick={async () => {
                                             try {
                                                 await api.post(`/auth/admin/approve/${u._id}`);
@@ -1065,10 +1118,10 @@ export default function AdminDashboard() {
                                         className="px-4 py-2 rounded-xl text-xs font-bold"
                                         style={{ background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)', color: '#10b981', fontFamily: "'DM Sans',sans-serif" }}>
                                         ✅ Approve
-                                    </motion.button>
-                                </motion.div>
+                                    </Motion.button>
+                                </Motion.div>
                             ))}
-                        </motion.div>
+                        </Motion.div>
                     )}
 
                 </AnimatePresence>
@@ -1077,7 +1130,7 @@ export default function AdminDashboard() {
             {/* Modals */}
             <AnimatePresence>
                 {selected && (
-                    <DetailModal complaint={selected} onClose={() => setSelected(null)} onSave={handleUpdate} />
+                    <DetailModal complaint={selected} onClose={() => setSelected(null)} onSave={handleUpdate} onRecord={updated => setComplaints(prev => prev.map(c => c._id === updated._id ? updated : c))} />
                 )}
                 {escalating && (
                     <EscalateModal complaint={escalating} onClose={() => setEscalating(null)}

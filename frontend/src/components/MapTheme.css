@@ -1,0 +1,5 @@
+/* Filter only the raster basemap. Markers, heatmaps, popups and attribution retain their colors. */
+[data-map-theme="dark"] .civic-basemap-tiles {
+    filter: invert(1) hue-rotate(180deg) brightness(.8) contrast(.9);
+}
+[data-map-theme="dark"] .leaflet-container { background: #101923; }

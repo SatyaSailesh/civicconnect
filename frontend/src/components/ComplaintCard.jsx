@@ -1,7 +1,47 @@
+import TrackingId from './TrackingId';
+import ComplaintVisibility from './ComplaintVisibility';
 import { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion as Motion, AnimatePresence } from 'framer-motion';
 import EscalationTimeline from './EscalationTimeline';
 import api from '../services/api';
+import { useAuth } from '../context/auth';
+
+function CitizenActions({ complaint, onSaved }) {
+    const { user } = useAuth();
+    const [editing, setEditing] = useState(false);
+    const [values, setValues] = useState({ title: complaint.title, description: complaint.description, category: complaint.category, location: complaint.location || '', lat: complaint.lat, lng: complaint.lng });
+    const [message, setMessage] = useState('');
+    const [busy, setBusy] = useState(false);
+    const [notice, setNotice] = useState('');
+    if (!user || user.role !== 'citizen' || String(complaint.user?._id || complaint.user) !== String(user._id || user.id)) return null;
+    const canEdit = complaint.status === 'Pending' && !complaint.assignedTo && !complaint.staffActionAt && !complaint.chatEnabled && (complaint.escalationLevel || 1) === 1;
+    const save = async () => {
+        setBusy(true);
+        try { const { data } = await api.patch(`/complaints/${complaint._id}/citizen-edit`, { ...values, version: complaint.__v }); onSaved(data); setEditing(false); setNotice('Complaint updated.'); }
+        catch (error) { setNotice(error.response?.data?.message || 'Could not update complaint.'); }
+        finally { setBusy(false); }
+    };
+    const correction = async () => {
+        setBusy(true);
+        try { const { data } = await api.post(`/complaints/${complaint._id}/corrections`, { message, version: complaint.__v }); onSaved(data); setMessage(''); setNotice('Correction request sent to the official.'); }
+        catch (error) { setNotice(error.response?.data?.message || 'Could not send correction request.'); }
+        finally { setBusy(false); }
+    };
+    const withdraw = async () => {
+        if (!window.confirm('Withdraw this complaint? Its case history will be retained.')) return;
+        setBusy(true);
+        try { const { data } = await api.post(`/complaints/${complaint._id}/withdraw`, { version: complaint.__v }); onSaved(data, true); setNotice('Complaint withdrawn; its history is retained.'); }
+        catch (error) { setNotice(error.response?.data?.message || 'Could not withdraw complaint.'); }
+        finally { setBusy(false); }
+    };
+    if (['Resolved', 'Rejected', 'Withdrawn'].includes(complaint.status)) return null;
+    return <div className="mb-5 rounded-xl p-4 space-y-3" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }} onClick={event => event.stopPropagation()}>
+        <p className="text-xs font-semibold text-white/70">Manage your complaint</p>
+        {canEdit ? (editing ? <div className="space-y-2"><input aria-label="Complaint title" value={values.title} onChange={e => setValues({ ...values, title: e.target.value })} className="w-full rounded-lg bg-white/5 p-2 text-sm text-white"/><textarea aria-label="Complaint description" value={values.description} onChange={e => setValues({ ...values, description: e.target.value })} className="w-full rounded-lg bg-white/5 p-2 text-sm text-white" rows={3}/><select aria-label="Complaint category" value={values.category} onChange={e => setValues({ ...values, category: e.target.value })} className="w-full rounded-lg bg-[#0d1825] p-2 text-sm text-white">{['Infrastructure', 'Corruption', 'Scam', 'Public Service'].map(category => <option key={category} value={category}>{category}</option>)}</select><input aria-label="Complaint location" value={values.location} onChange={e => setValues({ ...values, location: e.target.value, lat: e.target.value === complaint.location ? complaint.lat : null, lng: e.target.value === complaint.location ? complaint.lng : null })} className="w-full rounded-lg bg-white/5 p-2 text-sm text-white"/><div className="grid grid-cols-2 gap-2"><input aria-label="Corrected latitude" type="number" step="any" value={values.lat ?? ''} onChange={e => setValues({ ...values, lat: e.target.value === '' ? null : Number(e.target.value) })} placeholder="Latitude (optional)" className="min-w-0 rounded-lg bg-white/5 p-2 text-xs text-white placeholder:text-white/30"/><input aria-label="Corrected longitude" type="number" step="any" value={values.lng ?? ''} onChange={e => setValues({ ...values, lng: e.target.value === '' ? null : Number(e.target.value) })} placeholder="Longitude (optional)" className="min-w-0 rounded-lg bg-white/5 p-2 text-xs text-white placeholder:text-white/30"/></div><p className="text-[10px] text-white/40">Changing the written address clears the old pin; enter new coordinates if available.</p><div className="flex gap-2"><button disabled={busy} onClick={save} className="rounded-lg bg-emerald-500/20 px-3 py-2 text-xs text-emerald-200">{busy ? 'Saving…' : 'Save changes'}</button><button onClick={() => setEditing(false)} className="rounded-lg bg-white/5 px-3 py-2 text-xs text-white/70">Cancel</button></div></div> : <button onClick={() => setEditing(true)} className="rounded-lg bg-white/5 px-3 py-2 text-xs text-white/80">Edit complaint</button>) : <><p className="text-xs text-white/45">Staff have started work. You can request a correction or withdraw the complaint.</p><textarea aria-label="Correction request" value={message} onChange={e => setMessage(e.target.value)} maxLength={1000} placeholder="Describe the correction" className="w-full rounded-lg bg-white/5 p-2 text-sm text-white placeholder:text-white/30" rows={2}/><button disabled={busy || !message.trim()} onClick={correction} className="rounded-lg bg-blue-500/15 px-3 py-2 text-xs text-blue-200">Send correction request</button></>}
+        {notice && <p role="status" className="text-xs text-emerald-200">{notice}</p>}
+        <button disabled={busy} onClick={withdraw} className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-200">Withdraw complaint</button>
+    </div>;
+}
 
 // ─── Status config ────────────────────────────────────────────────────────────
 const STATUS = {
@@ -67,7 +107,7 @@ function ChatThread({ complaint: initial }) {
             try {
                 const { data } = await api.get(`/complaints/${complaint._id}`);
                 setComplaint(data);
-            } catch (_) { }
+            } catch { /* Keep the last fetched messages when polling fails. */ }
         }, 8000);
         return () => clearInterval(id);
     }, [complaint.chatEnabled, complaint._id]);
@@ -146,7 +186,7 @@ function ChatThread({ complaint: initial }) {
                             : 'This thread has been closed by the authority. You may request to reopen it.'}
                     </p>
                     {!reopenDone && !complaint.chatReopenRequested && (
-                        <motion.button whileTap={{ scale: 0.95 }} onClick={requestReopen} disabled={requesting}
+                        <Motion.button whileTap={{ scale: 0.95 }} onClick={requestReopen} disabled={requesting}
                             className="flex-shrink-0 px-4 py-2 rounded-xl text-xs font-bold disabled:opacity-50"
                             style={{
                                 background: 'rgba(59,130,246,0.1)',
@@ -155,7 +195,7 @@ function ChatThread({ complaint: initial }) {
                                 fontFamily: "'DM Sans',sans-serif",
                             }}>
                             {requesting ? '⏳ Sending…' : '📨 Request Reopen'}
-                        </motion.button>
+                        </Motion.button>
                     )}
                 </div>
             </div>
@@ -169,7 +209,7 @@ function ChatThread({ complaint: initial }) {
             {/* Header */}
             <div className="px-4 py-3 flex items-center gap-3"
                 style={{ borderBottom: '1px solid rgba(16,185,129,0.1)' }}>
-                <motion.span animate={{ opacity: [1, 0.3, 1] }} transition={{ repeat: Infinity, duration: 1.6 }}
+                <Motion.span animate={{ opacity: [1, 0.3, 1] }} transition={{ repeat: Infinity, duration: 1.6 }}
                     className="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0" />
                 <p className="text-xs font-bold text-emerald-400 flex-1"
                     style={{ fontFamily: "'DM Sans',sans-serif" }}>
@@ -215,7 +255,7 @@ function ChatThread({ complaint: initial }) {
                     value={text}
                     onChange={e => setText(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-                    placeholder="Type your official message…"
+                    placeholder="Type a message to the official…"
                     className="flex-1 px-4 py-2.5 rounded-xl text-sm text-white outline-none"
                     style={{
                         background: 'rgba(255,255,255,0.05)',
@@ -223,18 +263,18 @@ function ChatThread({ complaint: initial }) {
                         fontFamily: "'DM Sans',sans-serif",
                     }}
                 />
-                <motion.button whileTap={{ scale: 0.9 }} onClick={sendMessage}
+                <Motion.button whileTap={{ scale: 0.9 }} onClick={sendMessage}
                     disabled={sending || !text.trim()}
                     className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 disabled:opacity-40"
                     style={{ background: 'linear-gradient(135deg,#10b981,#3b82f6)' }}>
                     {sending
-                        ? <motion.span animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 0.8, ease: 'linear' }}
+                        ? <Motion.span animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 0.8, ease: 'linear' }}
                             className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full block" />
                         : <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                         </svg>
                     }
-                </motion.button>
+                </Motion.button>
             </div>
         </div>
     );
@@ -276,6 +316,7 @@ function StarRating({ complaintId, onRated }) {
             <div className="flex gap-2">
                 {[1, 2, 3, 4, 5].map(star => (
                     <button key={star}
+                        aria-label={`Rate ${star} stars`}
                         onMouseEnter={() => setHovered(star)}
                         onMouseLeave={() => setHovered(0)}
                         onClick={() => setSelected(star)}
@@ -288,11 +329,11 @@ function StarRating({ complaintId, onRated }) {
                 placeholder="Optional: add a comment..."
                 className="w-full px-3 py-2 rounded-xl text-sm text-white outline-none"
                 style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', fontFamily: "'DM Sans',sans-serif" }} />
-            <motion.button whileTap={{ scale: 0.97 }} onClick={submit} disabled={!selected || saving}
+            <Motion.button whileTap={{ scale: 0.97 }} onClick={submit} disabled={!selected || saving}
                 className="w-full py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-40 relative overflow-hidden">
                 <span className="absolute inset-0 bg-gradient-to-r from-emerald-500 to-blue-600" />
                 <span className="relative z-10">{saving ? 'Submitting…' : 'Submit Rating'}</span>
-            </motion.button>
+            </Motion.button>
         </div>
     );
 }
@@ -310,7 +351,7 @@ export default function ComplaintCard({ complaint: initialComplaint, onUpdate })
         api.get(`/complaints/${complaint._id}`)
             .then(({ data }) => setComplaint(data))
             .catch(() => { });
-    }, [expanded]);
+    }, [expanded, complaint._id]);
 
     if (!complaint) return null;
 
@@ -321,7 +362,7 @@ export default function ComplaintCard({ complaint: initialComplaint, onUpdate })
     const hasLocation = complaint.city || complaint.location;
 
     return (
-        <motion.div layout
+        <Motion.div layout
             initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
             className="group relative rounded-2xl overflow-hidden cursor-pointer"
@@ -334,6 +375,7 @@ export default function ComplaintCard({ complaint: initialComplaint, onUpdate })
             }}
             onClick={() => setExpanded(!expanded)}>
 
+            <div className="px-5 pt-3"><TrackingId value={complaint.complaintId} /></div>
             {/* Left accent bar */}
             <div className="absolute left-0 top-0 bottom-0 w-0.5 rounded-l-2xl transition-all duration-300"
                 style={{ background: expanded ? `linear-gradient(180deg,${status.color},transparent)` : 'transparent' }} />
@@ -370,25 +412,25 @@ export default function ComplaintCard({ complaint: initialComplaint, onUpdate })
 
                     {/* Content */}
                     <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-3 mb-2">
-                            <h3 className="text-base font-bold text-white leading-tight truncate">
+                        <div className="flex flex-col sm:flex-row items-start justify-between gap-3 mb-2">
+                            <h3 className="text-base font-bold text-white leading-tight break-words">
                                 {complaint.title || 'Untitled Complaint'}
                             </h3>
                             <div className="flex items-center gap-2 flex-shrink-0">
                                 {isEscalated && (
-                                    <motion.span animate={{ scale: [1, 1.05, 1] }} transition={{ repeat: Infinity, duration: 2 }}
+                                    <Motion.span animate={{ scale: [1, 1.05, 1] }} transition={{ repeat: Infinity, duration: 2 }}
                                         className="text-[10px] font-bold px-2 py-0.5 rounded-full"
                                         style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.25)' }}>
                                         🔺 L{complaint.escalationLevel}
-                                    </motion.span>
+                                    </Motion.span>
                                 )}
                                 {/* Chat indicator */}
                                 {complaint.chatEnabled && (
-                                    <motion.span animate={{ opacity: [1, 0.4, 1] }} transition={{ repeat: Infinity, duration: 1.6 }}
+                                    <Motion.span animate={{ opacity: [1, 0.4, 1] }} transition={{ repeat: Infinity, duration: 1.6 }}
                                         className="text-[10px] font-bold px-2 py-0.5 rounded-full"
                                         style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981', border: '1px solid rgba(16,185,129,0.25)' }}>
                                         💬 Chat Open
-                                    </motion.span>
+                                    </Motion.span>
                                 )}
                                 <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full"
                                     style={{ background: status.bg, color: status.color, border: `1px solid ${status.border}` }}>
@@ -425,18 +467,18 @@ export default function ComplaintCard({ complaint: initialComplaint, onUpdate })
                     </div>
 
                     {/* Chevron */}
-                    <motion.div animate={{ rotate: expanded ? 90 : 0 }} transition={{ duration: 0.2 }}
+                    <Motion.div animate={{ rotate: expanded ? 90 : 0 }} transition={{ duration: 0.2 }}
                         className="flex-shrink-0 w-7 h-7 rounded-xl flex items-center justify-center self-center"
                         style={{ background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.35)' }}>
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                         </svg>
-                    </motion.div>
+                    </Motion.div>
                 </div>
 
                 {complaint.status === 'In Progress' && (
                     <div className="mt-4 h-0.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
-                        <motion.div className="h-full rounded-full"
+                        <Motion.div className="h-full rounded-full"
                             style={{ background: 'linear-gradient(90deg,#3b82f6,#8b5cf6)' }}
                             animate={{ x: ['-100%', '100%'] }}
                             transition={{ repeat: Infinity, duration: 1.8, ease: 'easeInOut' }} />
@@ -447,7 +489,7 @@ export default function ComplaintCard({ complaint: initialComplaint, onUpdate })
             {/* ── EXPANDED SECTION ── */}
             <AnimatePresence initial={false}>
                 {expanded && (
-                    <motion.div key="expanded"
+                    <Motion.div key="expanded"
                         initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
                         className="overflow-hidden"
@@ -455,6 +497,8 @@ export default function ComplaintCard({ complaint: initialComplaint, onUpdate })
 
                         <div className="px-5 pb-5 pt-1" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
 
+                            <ComplaintVisibility complaint={complaint} onChange={setComplaint} />
+                            <CitizenActions complaint={complaint} onSaved={(data, refresh = false) => { setComplaint(data); if (refresh) onUpdate?.(); }} />
                             {/* Full description */}
                             <div className="mb-5 pt-4">
                                 <p className="text-xs font-semibold text-white/30 uppercase tracking-widest mb-2"
@@ -473,13 +517,13 @@ export default function ComplaintCard({ complaint: initialComplaint, onUpdate })
                                     </p>
                                     <div className="flex gap-3 flex-wrap">
                                         {complaint.images.map((img, i) => (
-                                            <motion.div key={i} whileHover={{ scale: 1.04 }}
+                                            <Motion.div key={i} whileHover={{ scale: 1.04 }}
                                                 className="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0"
                                                 style={{ border: '1px solid rgba(255,255,255,0.1)' }}>
                                                 <img src={img} alt={`Evidence ${i + 1}`}
                                                     className="w-full h-full object-cover"
                                                     onError={e => e.target.parentNode.style.display = 'none'} />
-                                            </motion.div>
+                                            </Motion.div>
                                         ))}
                                     </div>
                                 </div>
@@ -579,14 +623,14 @@ export default function ComplaintCard({ complaint: initialComplaint, onUpdate })
                             {complaint.status === 'Resolved' && !complaint.rating && (
                                 <div className="mb-5">
                                     {!showRating ? (
-                                        <motion.button whileTap={{ scale: 0.97 }}
+                                        <Motion.button whileTap={{ scale: 0.97 }}
                                             onClick={() => setShowRating(true)}
                                             className="w-full py-2.5 rounded-xl text-sm font-semibold"
                                             style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.25)', color: '#10b981', fontFamily: "'DM Sans',sans-serif" }}>
                                             ⭐ Rate This Resolution
-                                        </motion.button>
+                                        </Motion.button>
                                     ) : (
-                                        <StarRating complaintId={complaint._id} onRated={() => setShowRating(false)} />
+                                        <StarRating complaintId={complaint._id} onRated={() => { setShowRating(false); onUpdate?.(); api.get(`/complaints/${complaint._id}`).then(({ data }) => setComplaint(data)); }} />
                                     )}
                                 </div>
                             )}
@@ -602,16 +646,16 @@ export default function ComplaintCard({ complaint: initialComplaint, onUpdate })
                             )}
 
                             {/* Collapse button */}
-                            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                            <Motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
                                 className="w-full py-2.5 rounded-xl text-sm font-semibold"
                                 style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.6)', fontFamily: "'DM Sans',sans-serif" }}
                                 onClick={() => setExpanded(false)}>
                                 Collapse ↑
-                            </motion.button>
+                            </Motion.button>
                         </div>
-                    </motion.div>
+                    </Motion.div>
                 )}
             </AnimatePresence>
-        </motion.div>
+        </Motion.div>
     );
 }

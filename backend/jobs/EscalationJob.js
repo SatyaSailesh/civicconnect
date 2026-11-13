@@ -20,7 +20,7 @@ async function runEscalation() {
             status: { $in: ['Pending', 'In Progress'] },
             escalationLevel: { $lt: MAX_LEVEL },
             updatedAt: { $lt: cutoff },
-        }).populate('user', 'name email');
+        }).populate('user', 'name email emailNotifications');
 
         if (stale.length === 0) return;
 
@@ -32,7 +32,7 @@ async function runEscalation() {
             const updated = await Complaint.findOneAndUpdate(
                 { _id: complaint._id, escalationLevel: complaint.escalationLevel, updatedAt: complaint.updatedAt },
                 {
-                    $set: { escalationLevel: newLevel },
+                    $set: { escalationLevel: newLevel, staffActionAt: complaint.staffActionAt || new Date() },
                     $push: {
                         history: {
                             action: "Automatically Escalated",
@@ -46,7 +46,7 @@ async function runEscalation() {
             if (!updated) continue;
 
             // Notify citizen
-            if (complaint.user?.email) {
+            if (complaint.user?.email && complaint.user.emailNotifications !== false) {
                 await notifyEscalation({
                     citizenEmail: complaint.user.email,
                     citizenName: complaint.user.name,

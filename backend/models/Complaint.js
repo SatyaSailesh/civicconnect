@@ -33,7 +33,7 @@ const ComplaintSchema = new mongoose.Schema({
     pincode: { type: String, default: "" },
     lat: { type: Number, default: null },
     lng: { type: Number, default: null },
-    status: { type: String, enum: ["Pending", "In Progress", "Resolved", "Rejected"], default: "Pending" },
+    status: { type: String, enum: ["Pending", "In Progress", "Resolved", "Rejected", "Withdrawn"], default: "Pending" },
     priority: { type: String, enum: ["Normal", "High", "Critical"], default: "Normal" },
     escalationLevel: { type: Number, default: 1, min: 1, max: 4 },
     escalationLetters: [EscalationLetterSchema],
@@ -42,7 +42,16 @@ const ComplaintSchema = new mongoose.Schema({
     messages: [MessageSchema],   // follow-up thread
     rating: { type: Number, default: null, min: 1, max: 5 },
     ratingComment: { type: String, default: "" },
-    isPublic: { type: Boolean, default: true },
+    isPublic: { type: Boolean, default: false },
+    assignedDepartment: { type: String, default: '' },
+    jurisdiction: { type: String, default: '' },
+    routingStatus: { type: String, enum: ['review', 'suggested', 'routed', 'assigned'], default: 'review' },
+    routingSource: { type: String, enum: ['unmatched', 'demo', 'verified', 'official'], default: 'unmatched' },
+    assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    staffActionAt: { type: Date, default: null },
+    withdrawnAt: { type: Date, default: null },
+    withdrawnBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    correctionRequests: [{ message: { type: String, required: true, maxlength: 1000 }, status: { type: String, enum: ['pending', 'accepted', 'declined'], default: 'pending' }, response: { type: String, default: '' }, requestedAt: { type: Date, default: Date.now }, reviewedAt: Date, reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' } }],
     chatEnabled: { type: Boolean, default: false },   // admin opens chat
     chatReopenRequested: { type: Boolean, default: false },   // citizen requests reopen
     history: [
@@ -54,6 +63,7 @@ const ComplaintSchema = new mongoose.Schema({
         }
     ],
 }, { timestamps: true });
+ComplaintSchema.set('optimisticConcurrency', true);
 
 // Auto-generate human-readable complaintId before save
 ComplaintSchema.pre("save", async function (next) {

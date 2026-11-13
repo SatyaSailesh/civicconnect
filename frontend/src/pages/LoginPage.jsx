@@ -1,7 +1,7 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { motion, AnimatePresence, useMotionValue, useSpring } from 'framer-motion';
+import { useAuth } from '../context/auth';
+import { motion as Motion, AnimatePresence, useMotionValue, useSpring } from 'framer-motion';
 
 // ─── Magnetic Button (same as landing) ───────────────────────────────────────
 function MagneticButton({ children, className }) {
@@ -18,7 +18,7 @@ function MagneticButton({ children, className }) {
     };
 
     return (
-        <motion.div
+        <Motion.div
             ref={ref}
             onMouseMove={handleMove}
             onMouseLeave={() => { x.set(0); y.set(0); }}
@@ -26,33 +26,33 @@ function MagneticButton({ children, className }) {
             className={className}
         >
             {children}
-        </motion.div>
+        </Motion.div>
     );
 }
 
 // ─── Floating Particle ────────────────────────────────────────────────────────
 function ParticleField() {
-    const particles = useRef(
+    const [particles] = useState(() =>
         Array.from({ length: 35 }, (_, i) => ({
             id: i,
-            x: Math.random() * 100,
-            y: Math.random() * 100,
-            size: Math.random() * 2.5 + 1,
-            duration: Math.random() * 18 + 10,
-            delay: Math.random() * 8,
-            opacity: Math.random() * 0.35 + 0.08,
+            x: (((i + 1) * 30) % 101 / 101) * 100,
+            y: (((i + 1) * 47) % 101 / 101) * 100,
+            size: (((i + 1) * 64) % 101 / 101) * 2.5 + 1,
+            duration: (((i + 1) * 81) % 101 / 101) * 18 + 10,
+            delay: (((i + 1) * 98) % 101 / 101) * 8,
+            opacity: (((i + 1) * 115) % 101 / 101) * 0.35 + 0.08,
             color: i % 3 === 0 ? '#10b981' : i % 3 === 1 ? '#3b82f6' : '#8b5cf6',
         }))
-    ).current;
+    );
 
     return (
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
             {particles.map((p) => (
-                <motion.div
+                <Motion.div
                     key={p.id}
                     className="absolute rounded-full"
                     style={{ left: `${p.x}%`, top: `${p.y}%`, width: p.size, height: p.size, background: p.color, opacity: p.opacity }}
-                    animate={{ y: [0, -35, 0], x: [0, (Math.random() - 0.5) * 18, 0], opacity: [p.opacity, p.opacity * 1.6, p.opacity] }}
+                    animate={{ y: [0, -35, 0], x: [0, ((((p.id + 1) * 132) % 101 / 101) - 0.5) * 18, 0], opacity: [p.opacity, p.opacity * 1.6, p.opacity] }}
                     transition={{ duration: p.duration, delay: p.delay, repeat: Infinity, ease: 'easeInOut' }}
                 />
             ))}
@@ -76,9 +76,9 @@ function GridBackground() {
 
 // ─── Live Stats Strip ─────────────────────────────────────────────────────────
 const LIVE_STATS = [
-    { label: 'Citizens Online', value: '2,847', color: '#10b981' },
-    { label: 'Issues Resolved Today', value: '142', color: '#3b82f6' },
-    { label: 'Active Grievances', value: '891', color: '#f59e0b' },
+    { label: 'Account Roles', value: '2', color: '#10b981' },
+    { label: 'Complaint Tracking', value: 'By ID', color: '#3b82f6' },
+    { label: 'Default Visibility', value: 'Private', color: '#f59e0b' },
 ];
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -162,7 +162,7 @@ const LoginPage = () => {
             <div className="relative z-10 w-full max-w-5xl mx-auto px-6 py-12 grid lg:grid-cols-2 gap-12 items-center min-h-screen">
 
                 {/* ── LEFT PANEL — Branding ── */}
-                <motion.div
+                <Motion.div
                     initial={{ opacity: 0, x: -40 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
@@ -172,7 +172,7 @@ const LoginPage = () => {
                     <Link to="/" className="inline-flex items-center gap-3 mb-14 group w-fit">
                         <div className="relative w-10 h-10">
                             <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-400 to-blue-600 flex items-center justify-center text-lg">🌐</div>
-                            <motion.div
+                            <Motion.div
                                 animate={{ scale: [1, 1.4, 1], opacity: [1, 0.5, 1] }}
                                 transition={{ repeat: Infinity, duration: 2.5 }}
                                 className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 rounded-full border border-[#03070f]"
@@ -199,7 +199,7 @@ const LoginPage = () => {
                     {/* Live stats */}
                     <div className="space-y-3 mb-10">
                         {LIVE_STATS.map((stat, i) => (
-                            <motion.div
+                            <Motion.div
                                 key={stat.label}
                                 initial={{ opacity: 0, x: -20 }}
                                 animate={{ opacity: 1, x: 0 }}
@@ -207,7 +207,7 @@ const LoginPage = () => {
                                 className="flex items-center justify-between glass rounded-2xl px-5 py-3.5"
                             >
                                 <div className="flex items-center gap-3">
-                                    <motion.div
+                                    <Motion.div
                                         animate={{ opacity: [1, 0.3, 1] }}
                                         transition={{ repeat: Infinity, duration: 1.8, delay: i * 0.4 }}
                                         className="w-2 h-2 rounded-full"
@@ -216,14 +216,14 @@ const LoginPage = () => {
                                     <span className="text-sm text-white/55" style={{ fontFamily: "'DM Sans', sans-serif" }}>{stat.label}</span>
                                 </div>
                                 <span className="text-sm font-bold" style={{ color: stat.color }}>{stat.value}</span>
-                            </motion.div>
+                            </Motion.div>
                         ))}
                     </div>
 
                     {/* Trust badges */}
                     <div className="flex items-center gap-4 flex-wrap">
-                        {['🔒 Aadhaar Verified', '🛡️ Bank-grade Security', '🇮🇳 Made in India'].map((badge, i) => (
-                            <motion.span
+                        {['🔒 Demo Verification', '🛡️ Role-based Access', '🇮🇳 Made in India'].map((badge, i) => (
+                            <Motion.span
                                 key={badge}
                                 initial={{ opacity: 0 }}
                                 animate={{ opacity: 1 }}
@@ -232,13 +232,13 @@ const LoginPage = () => {
                                 style={{ fontFamily: "'DM Sans', sans-serif" }}
                             >
                                 {badge}
-                            </motion.span>
+                            </Motion.span>
                         ))}
                     </div>
-                </motion.div>
+                </Motion.div>
 
                 {/* ── RIGHT PANEL — Login Form ── */}
-                <motion.div
+                <Motion.div
                     initial={{ opacity: 0, x: 40 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1], delay: 0.1 }}
@@ -261,16 +261,16 @@ const LoginPage = () => {
                         <div className="relative glass rounded-[28px] p-8 lg:p-10">
                             {/* Header */}
                             <div className="mb-8">
-                                <motion.div
+                                <Motion.div
                                     initial={{ opacity: 0, y: 10 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ delay: 0.25 }}
                                     className="inline-flex items-center gap-2 glass px-3 py-1.5 rounded-full mb-5 text-xs text-emerald-400 font-medium"
                                 >
-                                    <motion.span animate={{ opacity: [1, 0.3, 1] }} transition={{ repeat: Infinity, duration: 1.5 }}
+                                    <Motion.span animate={{ opacity: [1, 0.3, 1] }} transition={{ repeat: Infinity, duration: 1.5 }}
                                         className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
                                     Intelligence Portal Access
-                                </motion.div>
+                                </Motion.div>
 
                                 <h2 className="text-3xl font-extrabold tracking-tight mb-2">Welcome Back</h2>
                                 <p className="text-white/35 text-sm" style={{ fontFamily: "'DM Sans', sans-serif" }}>
@@ -281,7 +281,7 @@ const LoginPage = () => {
                             {/* Error Message */}
                             <AnimatePresence>
                                 {error && (
-                                    <motion.div
+                                    <Motion.div
                                         initial={{ opacity: 0, height: 0, marginBottom: 0 }}
                                         animate={{ opacity: 1, height: 'auto', marginBottom: 20 }}
                                         exit={{ opacity: 0, height: 0, marginBottom: 0 }}
@@ -291,29 +291,29 @@ const LoginPage = () => {
                                             <span className="text-red-400 text-base mt-0.5 flex-shrink-0">⚠</span>
                                             <p className="text-red-400 text-sm" style={{ fontFamily: "'DM Sans', sans-serif" }}>{error}</p>
                                         </div>
-                                    </motion.div>
+                                    </Motion.div>
                                 )}
                             </AnimatePresence>
 
                             {/* Success State */}
                             <AnimatePresence>
                                 {success && (
-                                    <motion.div
+                                    <Motion.div
                                         initial={{ opacity: 0, scale: 0.9 }}
                                         animate={{ opacity: 1, scale: 1 }}
                                         className="flex flex-col items-center justify-center py-8 gap-3"
                                     >
-                                        <motion.div
+                                        <Motion.div
                                             initial={{ scale: 0 }}
                                             animate={{ scale: 1 }}
                                             transition={{ type: 'spring', stiffness: 300, damping: 18 }}
                                             className="w-16 h-16 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-3xl"
                                         >
                                             ✓
-                                        </motion.div>
+                                        </Motion.div>
                                         <p className="font-semibold text-emerald-400">Authenticated!</p>
                                         <p className="text-xs text-white/35" style={{ fontFamily: "'DM Sans', sans-serif" }}>Redirecting to dashboard…</p>
-                                    </motion.div>
+                                    </Motion.div>
                                 )}
                             </AnimatePresence>
 
@@ -410,9 +410,9 @@ const LoginPage = () => {
                                                 style={{ fontFamily: "'DM Sans', sans-serif" }}>
                                                 Password
                                             </label>
-                                            <button type="button" className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors font-medium"
+                                            <button type="button" disabled title="Password recovery is not available in this demo" className="text-xs text-white/30 hover:text-emerald-300 transition-colors font-medium"
                                                 style={{ fontFamily: "'DM Sans', sans-serif" }}>
-                                                Forgot password?
+                                                Recovery unavailable
                                             </button>
                                         </div>
                                         <div className="relative">
@@ -445,12 +445,12 @@ const LoginPage = () => {
                                         >
                                             <span className="text-[9px] text-emerald-400"></span>
                                         </button>
-                                        <span className="text-xs text-white/35" style={{ fontFamily: "'DM Sans', sans-serif" }}>Keep me signed in for 30 days</span>
+                                        <span className="text-xs text-white/35" style={{ fontFamily: "'DM Sans', sans-serif" }}>Session lasts up to 7 days</span>
                                     </div>
 
                                     {/* Submit */}
                                     <MagneticButton className="w-full cursor-pointer pt-1">
-                                        <motion.button
+                                        <Motion.button
                                             type="submit"
                                             disabled={loading}
                                             whileTap={{ scale: 0.98 }}
@@ -461,14 +461,14 @@ const LoginPage = () => {
                                             {/* Hover gradient */}
                                             <span className="absolute inset-0 bg-gradient-to-r from-blue-600 to-purple-600 opacity-0 group-hover:opacity-100 transition-opacity duration-400" />
                                             {/* Shimmer */}
-                                            <motion.span
+                                            <Motion.span
                                                 className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700"
                                             />
 
                                             <span className="relative z-10 flex items-center justify-center gap-2">
                                                 {loading ? (
                                                     <>
-                                                        <motion.span
+                                                        <Motion.span
                                                             animate={{ rotate: 360 }}
                                                             transition={{ repeat: Infinity, duration: 0.8, ease: 'linear' }}
                                                             className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full inline-block"
@@ -482,7 +482,7 @@ const LoginPage = () => {
                                                     </>
                                                 )}
                                             </span>
-                                        </motion.button>
+                                        </Motion.button>
                                     </MagneticButton>
 
                                     {/* Divider */}
@@ -498,16 +498,16 @@ const LoginPage = () => {
                                             { label: 'Google', icon: '🔵' },
                                             { label: 'Aadhaar OTP', icon: '🪪' },
                                         ].map((provider) => (
-                                            <motion.button
+                                            <Motion.button
                                                 key={provider.label}
-                                                type="button"
+                                                type="button" disabled title="Not available in this demo"
                                                 whileHover={{ scale: 1.02 }}
                                                 whileTap={{ scale: 0.97 }}
                                                 className="flex items-center justify-center gap-2 py-3 glass rounded-2xl text-sm font-medium text-white/60 hover:text-white hover:bg-white/8 transition-all"
                                                 style={{ fontFamily: "'DM Sans', sans-serif" }}
                                             >
-                                                <span>{provider.icon}</span> {provider.label}
-                                            </motion.button>
+                                                <span>{provider.icon}</span> {provider.label} (unavailable)
+                                            </Motion.button>
                                         ))}
                                     </div>
                                 </form>
@@ -529,16 +529,16 @@ const LoginPage = () => {
                     </div>
 
                     {/* Security note */}
-                    <motion.p
+                    <Motion.p
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         transition={{ delay: 0.7 }}
                         className="text-center text-xs text-white/20 mt-5"
                         style={{ fontFamily: "'DM Sans', sans-serif" }}
                     >
-                        🔒 256-bit encrypted · CERT-In compliant · No data sold
-                    </motion.p>
-                </motion.div>
+                        Portfolio demo · Synthetic verification · Private complaints by default
+                    </Motion.p>
+                </Motion.div>
             </div>
         </div>
     );

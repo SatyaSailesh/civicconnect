@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "test": "node --test test/csv.test.js",
+    "preview": "vite preview",
+    "test:e2e": "playwright test",
+    "demo": "vite --mode demo --host localhost --port 5174 --strictPort"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^5.1.4",
@@ -30,6 +33,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@playwright/test": "^1.65.0",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "eslint": "^9.39.1",

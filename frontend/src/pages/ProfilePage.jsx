@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/auth';
 import DashboardLayout from '../layouts/DashboardLayout';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion as Motion, AnimatePresence } from 'framer-motion';
 import api from '../services/api';
 
 const STATUS_CFG = {
@@ -31,8 +31,29 @@ const Ico = {
     chk: p => <svg {...p} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>,
 };
 
+const Input = ({ label, value, onChange, type = 'text', disabled, rightIcon }) => (
+        <div>
+            <label className="block text-[10px] font-semibold uppercase tracking-[0.12em] text-white/30 mb-2"
+                style={{ fontFamily: "'DM Sans',sans-serif" }}>{label}</label>
+            <div className="relative">
+                <input aria-label={label} type={type} value={value} onChange={onChange} disabled={disabled}
+                    className="w-full px-4 py-3 rounded-2xl text-sm text-white outline-none transition-all"
+                    style={{
+                        background: disabled ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.05)',
+                        border: `1px solid ${disabled ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.1)'}`,
+                        fontFamily: "'DM Sans',sans-serif",
+                        opacity: disabled ? 0.5 : 1,
+                    }} />
+                {rightIcon && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">{rightIcon}</div>
+                )}
+            </div>
+        </div>
+    );
+
+
 export default function ProfilePage() {
-    const { user, updateAadhaarVerification } = useAuth();
+    const { user, updateUser } = useAuth();
     const [complaints, setComplaints] = useState([]);
     const [loadingC, setLoadingC] = useState(true);
     const [tab, setTab] = useState('info');
@@ -40,7 +61,7 @@ export default function ProfilePage() {
     const [name, setName] = useState(user?.name || '');
     const [saving, setSaving] = useState(false);
     const [toast, setToast] = useState(null);
-    const [avatar, setAvatar] = useState(null);
+    const avatar = user?.avatarUrl || '';
     const [pw, setPw] = useState({ old: '', new: '', confirm: '' });
     const [pwShow, setPwShow] = useState({ old: false, new: false });
     const [pwErr, setPwErr] = useState('');
@@ -54,7 +75,7 @@ export default function ProfilePage() {
                 .catch(console.error)
                 .finally(() => setLoadingC(false));
         } else setLoadingC(false);
-    }, []);
+    }, [isAdmin]);
 
     const toast$ = (msg, ok = true) => {
         setToast({ msg, ok });
@@ -64,7 +85,8 @@ export default function ProfilePage() {
     const handleSaveName = async () => {
         setSaving(true);
         try {
-            await api.put('/auth/profile', { name });
+            const { data } = await api.put('/auth/profile', { name });
+            updateUser(data.user);
             toast$('Profile updated!');
             setEditMode(false);
         } catch { toast$('Failed to update profile', false); }
@@ -99,25 +121,6 @@ export default function ProfilePage() {
         { key: 'security', label: 'Security' },
     ];
 
-    const Input = ({ label, value, onChange, type = 'text', disabled, rightIcon }) => (
-        <div>
-            <label className="block text-[10px] font-semibold uppercase tracking-[0.12em] text-white/30 mb-2"
-                style={{ fontFamily: "'DM Sans',sans-serif" }}>{label}</label>
-            <div className="relative">
-                <input type={type} value={value} onChange={onChange} disabled={disabled}
-                    className="w-full px-4 py-3 rounded-2xl text-sm text-white outline-none transition-all"
-                    style={{
-                        background: disabled ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.05)',
-                        border: `1px solid ${disabled ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.1)'}`,
-                        fontFamily: "'DM Sans',sans-serif",
-                        opacity: disabled ? 0.5 : 1,
-                    }} />
-                {rightIcon && (
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2">{rightIcon}</div>
-                )}
-            </div>
-        </div>
-    );
 
     return (
         <DashboardLayout>
@@ -126,7 +129,7 @@ export default function ProfilePage() {
             {/* Toast */}
             <AnimatePresence>
                 {toast && (
-                    <motion.div initial={{ opacity: 0, y: -16, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+                    <Motion.div initial={{ opacity: 0, y: -16, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -16, scale: 0.95 }}
                         className="fixed top-6 right-6 z-50 px-5 py-3 rounded-2xl text-sm font-semibold shadow-2xl"
                         style={{
@@ -136,14 +139,14 @@ export default function ProfilePage() {
                             fontFamily: "'DM Sans',sans-serif",
                         }}>
                         {toast.ok ? '✅' : '❌'} {toast.msg}
-                    </motion.div>
+                    </Motion.div>
                 )}
             </AnimatePresence>
 
             <div className="max-w-3xl mx-auto space-y-5" style={{ fontFamily: "'Syne','DM Sans',sans-serif" }}>
 
                 {/* ── Hero card ── */}
-                <motion.div initial={{ opacity: 0, y: -14 }} animate={{ opacity: 1, y: 0 }}
+                <Motion.div initial={{ opacity: 0, y: -14 }} animate={{ opacity: 1, y: 0 }}
                     className="relative rounded-3xl overflow-hidden p-7"
                     style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
                     <div className="absolute inset-0 pointer-events-none"
@@ -152,7 +155,7 @@ export default function ProfilePage() {
                     <div className="relative flex flex-col sm:flex-row items-center sm:items-start gap-6">
                         {/* Avatar */}
                         <div className="relative flex-shrink-0">
-                            <motion.div whileHover={{ scale: 1.03 }}
+                            <Motion.div whileHover={{ scale: 1.03 }}
                                 className="w-20 h-20 rounded-3xl flex items-center justify-center text-xl font-extrabold text-white overflow-hidden"
                                 style={{
                                     background: avatar ? 'transparent' : `linear-gradient(135deg,#8b5cf6,#3b82f6)`,
@@ -161,27 +164,30 @@ export default function ProfilePage() {
                                 {avatar
                                     ? <img src={avatar} className="w-full h-full object-cover" alt="avatar" />
                                     : initials}
-                            </motion.div>
-                            <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
-                                onClick={() => fileRef.current?.click()}
+                            </Motion.div>
+                            <Motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+                                aria-label="Choose a profile photo" title="Saved to your account" onClick={() => fileRef.current?.click()}
                                 className="absolute -bottom-1.5 -right-1.5 w-7 h-7 rounded-xl flex items-center justify-center"
                                 style={{ background: 'linear-gradient(135deg,#10b981,#3b82f6)', border: '2px solid #03070f' }}>
                                 <Ico.cam className="w-3 h-3 text-white" />
-                            </motion.button>
+                            </Motion.button>
                             <input ref={fileRef} type="file" accept="image/*" className="hidden"
-                                onChange={e => {
+                                onChange={async e => {
                                     const f = e.target.files[0];
                                     if (!f) return;
-                                    const r = new FileReader();
-                                    r.onload = ev => setAvatar(ev.target.result);
-                                    r.readAsDataURL(f);
+                                    if (!['image/jpeg', 'image/png', 'image/webp'].includes(f.type) || f.size > 5 * 1024 * 1024) { toast$('Choose a JPEG, PNG or WebP image smaller than 5 MB', false); e.target.value = ''; return; }
+                                    setSaving(true);
+                                    try { const body = new FormData(); body.append('avatar', f); const { data } = await api.put('/auth/avatar', body, { headers: { 'Content-Type': 'multipart/form-data' } }); updateUser(data.user); toast$('Profile photo saved to your account'); }
+                                    catch (error) { toast$(error.response?.data?.message || 'Could not save profile photo', false); }
+                                    finally { setSaving(false); e.target.value = ''; }
                                 }} />
+                            {avatar && <button type="button" className="mt-3 text-xs text-white/55 hover:text-red-300" onClick={async () => { setSaving(true); try { const { data } = await api.delete('/auth/avatar'); updateUser(data.user); toast$('Profile photo removed'); } catch (error) { toast$(error.response?.data?.message || 'Could not remove profile photo', false); } finally { setSaving(false); } }}>Remove photo</button>}
                         </div>
 
                         {/* Name / email / badges */}
                         <div className="flex-1 text-center sm:text-left">
                             {editMode ? (
-                                <input value={name} onChange={e => setName(e.target.value)}
+                                <input aria-label="Display name" maxLength={100} value={name} onChange={e => setName(e.target.value)}
                                     className="text-2xl font-extrabold bg-transparent border-b-2 border-emerald-400/50 outline-none text-white mb-2 w-full"
                                     style={{ fontFamily: "'Syne',sans-serif" }}
                                     autoFocus />
@@ -199,7 +205,7 @@ export default function ProfilePage() {
                                 </span>
                                 {user?.aadhaarVerified
                                     ? <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full"
-                                        style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981' }}>🪪 Aadhaar Verified</span>
+                                        style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981' }}>🪪 Demo verification complete</span>
                                     : <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full"
                                         style={{ background: 'rgba(245,158,11,0.1)', color: '#f59e0b' }}>⏳ Unverified</span>}
                                 <span className="text-[11px] text-white/25" style={{ fontFamily: "'DM Sans',sans-serif" }}>
@@ -212,22 +218,22 @@ export default function ProfilePage() {
                         <div className="flex gap-2 flex-shrink-0">
                             {editMode ? (
                                 <>
-                                    <motion.button whileTap={{ scale: 0.95 }} onClick={handleSaveName} disabled={saving}
+                                    <Motion.button whileTap={{ scale: 0.95 }} onClick={handleSaveName} disabled={saving}
                                         className="px-4 py-2 rounded-xl text-sm font-bold relative overflow-hidden group disabled:opacity-60">
                                         <span className="absolute inset-0 bg-gradient-to-r from-emerald-500 to-blue-500" />
                                         <span className="relative z-10 text-white">{saving ? 'Saving…' : '✓ Save'}</span>
-                                    </motion.button>
+                                    </Motion.button>
                                     <button onClick={() => { setEditMode(false); setName(user?.name || ''); }}
                                         className="px-4 py-2 rounded-xl text-sm text-white/40"
                                         style={{ background: 'rgba(255,255,255,0.06)' }}>Cancel</button>
                                 </>
                             ) : (
-                                <motion.button whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.95 }}
+                                <Motion.button whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.95 }}
                                     onClick={() => setEditMode(true)}
                                     className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white/50"
                                     style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }}>
                                     <Ico.edit className="w-3.5 h-3.5" /> Edit
-                                </motion.button>
+                                </Motion.button>
                             )}
                         </div>
                     </div>
@@ -242,17 +248,17 @@ export default function ProfilePage() {
                                 { v: stats.pending, l: 'In Progress', c: '#f59e0b' },
                                 { v: stats.escalated, l: 'Escalated', c: '#ef4444' },
                             ].map(({ v, l, c }, i) => (
-                                <motion.div key={l} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                                <Motion.div key={l} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
                                     transition={{ delay: 0.1 + i * 0.06 }}
                                     className="text-center p-3 rounded-2xl"
                                     style={{ background: 'rgba(255,255,255,0.03)' }}>
                                     <p className="text-2xl font-extrabold" style={{ color: c }}>{v}</p>
                                     <p className="text-[10px] text-white/35 mt-0.5" style={{ fontFamily: "'DM Sans',sans-serif" }}>{l}</p>
-                                </motion.div>
+                                </Motion.div>
                             ))}
                         </div>
                     )}
-                </motion.div>
+                </Motion.div>
 
                 {/* ── Tabs ── */}
                 <div className="flex gap-1.5 p-1.5 rounded-2xl w-fit"
@@ -274,7 +280,7 @@ export default function ProfilePage() {
 
                     {/* ── My Info ── */}
                     {tab === 'info' && (
-                        <motion.div key="info" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
+                        <Motion.div key="info" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
                             className="rounded-3xl p-6 space-y-5"
                             style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
                             <h3 className="text-base font-bold text-white">Account Details</h3>
@@ -295,12 +301,12 @@ export default function ProfilePage() {
                                     </div>
                                 ))}
                             </div>
-                        </motion.div>
+                        </Motion.div>
                     )}
 
                     {/* ── Complaint History ── */}
                     {tab === 'history' && !isAdmin && (
-                        <motion.div key="hist" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
+                        <Motion.div key="hist" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
                             className="rounded-3xl p-6"
                             style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
                             <h3 className="text-base font-bold text-white mb-5">All My Complaints</h3>
@@ -319,7 +325,7 @@ export default function ProfilePage() {
                                     {complaints.map((c, i) => {
                                         const cfg = STATUS_CFG[c.status] || STATUS_CFG['Pending'];
                                         return (
-                                            <motion.div key={c._id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
+                                            <Motion.div key={c._id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
                                                 transition={{ delay: i * 0.04 }}
                                                 className="flex items-center gap-4 p-4 rounded-2xl"
                                                 style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
@@ -355,17 +361,17 @@ export default function ProfilePage() {
                                                         </div>
                                                     )}
                                                 </div>
-                                            </motion.div>
+                                            </Motion.div>
                                         );
                                     })}
                                 </div>
                             )}
-                        </motion.div>
+                        </Motion.div>
                     )}
 
                     {/* ── Security ── */}
                     {tab === 'security' && (
-                        <motion.div key="sec" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
+                        <Motion.div key="sec" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
                             className="space-y-4">
 
                             {/* Change password */}
@@ -384,12 +390,12 @@ export default function ProfilePage() {
 
                                 <AnimatePresence>
                                     {pwErr && (
-                                        <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+                                        <Motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
                                             className="p-3 rounded-2xl flex items-center gap-2"
                                             style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
                                             <span>⚠</span>
                                             <p className="text-red-400 text-sm" style={{ fontFamily: "'DM Sans',sans-serif" }}>{pwErr}</p>
-                                        </motion.div>
+                                        </Motion.div>
                                     )}
                                 </AnimatePresence>
 
@@ -421,7 +427,7 @@ export default function ProfilePage() {
                                     </div>
                                 )}
 
-                                <motion.button whileTap={{ scale: 0.97 }} onClick={handleChangePassword}
+                                <Motion.button whileTap={{ scale: 0.97 }} onClick={handleChangePassword}
                                     disabled={saving || !pw.old || !pw.new || !pw.confirm}
                                     className="w-full py-3.5 rounded-2xl font-bold text-sm relative overflow-hidden group disabled:opacity-50">
                                     <span className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-600" />
@@ -429,7 +435,7 @@ export default function ProfilePage() {
                                     <span className="relative z-10 text-white flex items-center justify-center gap-2">
                                         <Ico.lock className="w-4 h-4" /> Update Password
                                     </span>
-                                </motion.button>
+                                </Motion.button>
                             </div>
 
                             {/* Aadhaar status */}
@@ -445,43 +451,23 @@ export default function ProfilePage() {
                                         <span className="text-3xl">{user?.aadhaarVerified ? '🪪' : '⏳'}</span>
                                         <div>
                                             <p className="text-sm font-bold" style={{ color: user?.aadhaarVerified ? '#10b981' : '#f59e0b' }}>
-                                                {user?.aadhaarVerified ? 'Aadhaar Verified' : 'Verification Pending'}
+                                                {user?.aadhaarVerified ? 'Demo verification complete' : 'Verification Pending'}
                                             </p>
                                             <p className="text-xs text-white/35 mt-0.5" style={{ fontFamily: "'DM Sans',sans-serif" }}>
                                                 {user?.aadhaarVerified
-                                                    ? 'Your identity is confirmed. You can file and track complaints.'
-                                                    : 'Verify your Aadhaar to unlock complaint filing.'}
+                                                    ? 'Synthetic demo verification is complete. You can file and track complaints.'
+                                                    : 'Complete synthetic demo verification on your dashboard to file a complaint.'}
                                             </p>
                                         </div>
                                         {user?.aadhaarVerified && <Ico.chk className="w-5 h-5 text-emerald-400 ml-auto" />}
                                     </div>
                                 </div>
                             )}
-                        </motion.div>
+                        </Motion.div>
                     )}
 
                 </AnimatePresence>
             </div>
         </DashboardLayout>
-    );
-}
-
-// Helper used inside security tab
-function Input({ label, value, onChange, type = 'text', disabled, rightIcon }) {
-    return (
-        <div>
-            <label className="block text-[10px] font-semibold uppercase tracking-[0.12em] text-white/30 mb-2"
-                style={{ fontFamily: "'DM Sans',sans-serif" }}>{label}</label>
-            <div className="relative">
-                <input type={type} value={value} onChange={onChange} disabled={disabled}
-                    className="w-full px-4 py-3 rounded-2xl text-sm text-white outline-none"
-                    style={{
-                        background: disabled ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.05)',
-                        border: `1px solid ${disabled ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.1)'}`,
-                        fontFamily: "'DM Sans',sans-serif",
-                    }} />
-                {rightIcon && <div className="absolute right-3 top-1/2 -translate-y-1/2">{rightIcon}</div>}
-            </div>
-        </div>
     );
 }

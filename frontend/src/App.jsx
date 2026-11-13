@@ -1,15 +1,16 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ProtectedRoute, AdminRoute, GuestRoute } from './components/ProtectedRoute';
 
-import LandingPage from './pages/LandingPage';
-import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
-import CitizenDashboard from './pages/CitizenDashboard';
-import AdminDashboard from './pages/AdminDashboard';
-import ProfilePage from './pages/ProfilePage';
-import PublicFeedPage from './pages/PublicFeedPage';
-import SettingsPage from './pages/SettingsPage';
+const LandingPage = lazy(() => import('./pages/LandingPage'));
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const RegisterPage = lazy(() => import('./pages/RegisterPage'));
+const CitizenDashboard = lazy(() => import('./pages/CitizenDashboard'));
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const PublicFeedPage = lazy(() => import('./pages/PublicFeedPage'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 
 export default function App() {
   return (
@@ -17,6 +18,7 @@ export default function App() {
     // (including AuthContext consumers) can safely call useNavigate
     <BrowserRouter>
       <AuthProvider>
+        <Suspense fallback={<div role="status" className="min-h-screen bg-[#03070f] text-white flex items-center justify-center">Loading page…</div>}>
         <Routes>
           {/* Public */}
           <Route path="/" element={<LandingPage />} />
@@ -28,7 +30,7 @@ export default function App() {
           {/* Protected — any logged-in user */}
           <Route path="/citizen" element={<ProtectedRoute><CitizenDashboard /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
-          <Route path="/feed" element={<ProtectedRoute><PublicFeedPage /></ProtectedRoute>} />
+          <Route path="/feed" element={<PublicFeedPage />} />
           <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
 
           {/* Admin only */}
@@ -37,6 +39,7 @@ export default function App() {
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </Suspense>
       </AuthProvider>
     </BrowserRouter>
   );

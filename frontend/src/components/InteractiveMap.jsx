@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useAuth } from '../context/auth';
+import MapThemeControl from './MapThemeControl';
+import './MapTheme.css';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet.markercluster';
@@ -218,10 +221,15 @@ function getSearchText(complaint) {
         .toLowerCase();
 }
 
-export default function InteractiveMap({ complaints = [], isCitizen = false }) {
+const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+
+export default function InteractiveMap({ complaints = [], isCitizen = false, externalSearch = '' }) {
+    const { user } = useAuth();
     const mapContainerRef = useRef(null);
     const mapRef = useRef(null);
     const clusterGroupRef = useRef(null);
+    const markerRefs = useRef(new Map());
+    const [selectedResult, setSelectedResult] = useState(null);
     const heatLayerRef = useRef(null);
     const hasAutoFittedRef = useRef(false);
     const previousSignatureRef = useRef('');
@@ -233,6 +241,7 @@ export default function InteractiveMap({ complaints = [], isCitizen = false }) {
     const [searchQuery, setSearchQuery] = useState('');
     const [heatmapAvailable, setHeatmapAvailable] = useState(false);
     const [mapError, setMapError] = useState(null);
+    const [tilesUnavailable, setTilesUnavailable] = useState(false);
 
     useEffect(() => {
         const id = 'leaflet-custom-styles';
@@ -257,6 +266,7 @@ export default function InteractiveMap({ complaints = [], isCitizen = false }) {
     }, []);
 
     useEffect(() => {
+        const mapContainer = mapContainerRef.current;
         return () => {
             try {
                 if (clusterGroupRef.current) {
@@ -284,8 +294,8 @@ export default function InteractiveMap({ complaints = [], isCitizen = false }) {
             } catch (e) {
                 console.warn('[InteractiveMap] Error removing map during cleanup:', e);
             }
-            if (mapContainerRef.current && mapContainerRef.current._leaflet_id) {
-                mapContainerRef.current._leaflet_id = null;
+            if (mapContainer && mapContainer._leaflet_id) {
+                mapContainer._leaflet_id = null;
             }
             clusterGroupRef.current = null;
             heatLayerRef.current = null;
@@ -296,7 +306,7 @@ export default function InteractiveMap({ complaints = [], isCitizen = false }) {
     }, []);
 
     const visibleComplaints = useMemo(() => {
-        const query = searchQuery.trim().toLowerCase();
+        const query = (searchQuery || externalSearch).trim().toLowerCase();
         return complaints.filter((complaint) => {
             const coords = extractCoordinates(complaint);
             if (!coords) return false;
@@ -321,7 +331,17 @@ export default function InteractiveMap({ complaints = [], isCitizen = false }) {
             if (query && !getSearchText(complaint).includes(query)) return false;
             return true;
         });
-    }, [complaints, categoryFilter, dateFilter, priorityFilter, searchQuery, statusFilter]);
+    }, [complaints, categoryFilter, dateFilter, priorityFilter, searchQuery, externalSearch, statusFilter]);
+
+    const searchResults = useMemo(() => {
+        const query = (searchQuery || externalSearch).trim().toLowerCase();
+        return query ? complaints.filter(complaint => getSearchText(complaint).includes(query)).slice(0, 20) : [];
+    }, [complaints, searchQuery, externalSearch]);
+
+    const unmappedComplaintCount = useMemo(
+        () => complaints.filter((complaint) => !extractCoordinates(complaint)).length,
+        [complaints]
+    );
 
     const stats = useMemo(() => {
         const pending = visibleComplaints.filter((complaint) => normalizeStatus(complaint.status) === 'Pending').length;
@@ -371,12 +391,14 @@ export default function InteractiveMap({ complaints = [], isCitizen = false }) {
                 }
                 mapRef.current = L.map(container, {
                     zoomControl: true,
-                    attributionControl: false
+                    attributionControl: true
                 }).setView([20.5937, 78.9629], 5);
 
-                L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-                    maxZoom: 20
-                }).addTo(mapRef.current);
+                L.tileLayer(import.meta.env.VITE_MAP_TILE_URL || 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    className: 'civic-basemap-tiles',
+                    maxZoom: 19,
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                }).on('tileerror', () => setTilesUnavailable(true)).addTo(mapRef.current);
             }
 
             const map = mapRef.current;
@@ -430,7 +452,7 @@ export default function InteractiveMap({ complaints = [], isCitizen = false }) {
                 if (heatLayer && heatLayer._map && typeof heatLayer.setLatLngs === 'function') {
                     try {
                         heatLayer.setLatLngs([]);
-                    } catch (e) {}
+                    } catch { /* Layer may have been removed during cleanup. */ }
                 }
                 previousSignatureRef.current = '';
                 return;
@@ -442,7 +464,9 @@ export default function InteractiveMap({ complaints = [], isCitizen = false }) {
             }
 
             clusterGroup.clearLayers();
+            markerRefs.current.clear();
 
+            markerRefs.current.clear();
             const bounds = [];
             const heatPoints = [];
             const seenHeatPoints = new Set();
@@ -480,34 +504,34 @@ export default function InteractiveMap({ complaints = [], isCitizen = false }) {
 
                 const popupContent = isCitizen ? `
                     <div style="font-family: 'DM Sans', sans-serif; color: #f8fafc; line-height: 1.5; font-size: 12px; width: 220px;">
-                        <h4 style="margin: 0 0 6px 0; font-size: 14px; font-weight: 700; color: #ffffff; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 4px;">${complaint.title}</h4>
+                        <h4 style="margin: 0 0 6px 0; font-size: 14px; font-weight: 700; color: #ffffff; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 4px;">${escapeHtml(complaint.title)}</h4>
                         <div style="display: grid; grid-template-columns: 80px 1fr; gap: 4px;">
                             <span style="color: rgba(255,255,255,0.4);">Tracking ID:</span>
-                            <span style="font-family: monospace; font-weight: 600; color: #3b82f6;">${complaint.complaintId || '—'}</span>
+                            <span style="font-family: monospace; font-weight: 600; color: #3b82f6;">${escapeHtml(complaint.complaintId || '—')}</span>
                             <span style="color: rgba(255,255,255,0.4);">Category:</span>
-                            <span>${complaint.category}</span>
+                            <span>${escapeHtml(complaint.category)}</span>
                             <span style="color: rgba(255,255,255,0.4);">Status:</span>
-                            <span style="color: ${color}; font-weight: 700;">● ${complaint.status}</span>
+                            <span style="color: ${color}; font-weight: 700;">● ${escapeHtml(complaint.status)}</span>
                             <span style="color: rgba(255,255,255,0.4);">Priority:</span>
-                            <span style="font-weight: 600;">${complaint.priority}</span>
+                            <span style="font-weight: 600;">${escapeHtml(complaint.priority)}</span>
                             <span style="color: rgba(255,255,255,0.4);">Created:</span>
                             <span>${dateStr}</span>
                         </div>
                     </div>
                 ` : `
                     <div style="font-family: 'DM Sans', sans-serif; color: #f8fafc; line-height: 1.5; font-size: 12px; width: 220px;">
-                        <h4 style="margin: 0 0 6px 0; font-size: 14px; font-weight: 700; color: #ffffff; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 4px;">${complaint.title}</h4>
+                        <h4 style="margin: 0 0 6px 0; font-size: 14px; font-weight: 700; color: #ffffff; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 4px;">${escapeHtml(complaint.title)}</h4>
                         <div style="display: grid; grid-template-columns: 80px 1fr; gap: 4px;">
                             <span style="color: rgba(255,255,255,0.4);">ID:</span>
-                            <span style="font-family: monospace; font-weight: 600; color: #3b82f6;">${complaint.complaintId || '—'}</span>
+                            <span style="font-family: monospace; font-weight: 600; color: #3b82f6;">${escapeHtml(complaint.complaintId || '—')}</span>
                             <span style="color: rgba(255,255,255,0.4);">Citizen:</span>
-                            <span>${complaint.user?.name || complaint.citizenName || 'Citizen'}</span>
+                            <span>${escapeHtml(complaint.user?.name || complaint.citizenName || 'Citizen')}</span>
                             <span style="color: rgba(255,255,255,0.4);">Category:</span>
-                            <span>${complaint.category}</span>
+                            <span>${escapeHtml(complaint.category)}</span>
                             <span style="color: rgba(255,255,255,0.4);">Status:</span>
-                            <span style="color: ${color}; font-weight: 700;">● ${complaint.status}</span>
+                            <span style="color: ${color}; font-weight: 700;">● ${escapeHtml(complaint.status)}</span>
                             <span style="color: rgba(255,255,255,0.4);">Priority:</span>
-                            <span style="font-weight: 600;">${complaint.priority}</span>
+                            <span style="font-weight: 600;">${escapeHtml(complaint.priority)}</span>
                             <span style="color: rgba(255,255,255,0.4);">Created:</span>
                             <span>${dateStr}</span>
                         </div>
@@ -516,6 +540,8 @@ export default function InteractiveMap({ complaints = [], isCitizen = false }) {
 
                 const marker = L.marker([lat, lng], { icon: customIcon })
                     .bindPopup(popupContent, { className: 'custom-map-popup' });
+
+                markerRefs.current.set(complaint._id, marker);
 
                 clusterGroup.addLayer(marker);
                 bounds.push([lat, lng]);
@@ -530,7 +556,7 @@ export default function InteractiveMap({ complaints = [], isCitizen = false }) {
             if (heatLayer && heatLayer._map && typeof heatLayer.setLatLngs === 'function') {
                 try {
                     heatLayer.setLatLngs(heatPoints);
-                } catch (e) {}
+                } catch { /* Layer may have been removed during cleanup. */ }
             }
             previousSignatureRef.current = complaintSignature;
 
@@ -544,6 +570,16 @@ export default function InteractiveMap({ complaints = [], isCitizen = false }) {
         }
     }, [complaints, heatmapAvailable, isCitizen, viewMode, visibleComplaints]);
 
+    useEffect(() => {
+        const marker = markerRefs.current.get(selectedResult?.id);
+        const map = mapRef.current;
+        if (!marker || !map || viewMode !== 'markers') return;
+        map.setView(marker.getLatLng(), Math.max(map.getZoom(), 16));
+        clusterGroupRef.current.zoomToShowLayer(marker, () => {
+            if (mapRef.current === map && markerRefs.current.get(selectedResult.id) === marker) marker.openPopup();
+        });
+    }, [selectedResult, viewMode, visibleComplaints]);
+
     if (mapError) {
         return (
             <div style={{ width: '100%', height: '100%', minHeight: '300px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '18px', border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(15, 23, 42, 0.72)', padding: '16px' }}>
@@ -556,7 +592,17 @@ export default function InteractiveMap({ complaints = [], isCitizen = false }) {
     }
 
     return (
-        <div style={{ width: '100%', height: '100%', minHeight: '300px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <div data-map-theme={user?.mapTheme === 'dark' ? 'dark' : 'light'} style={{ width: '100%', height: '100%', minHeight: '300px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <MapThemeControl />
+            {(searchQuery || externalSearch).trim() && <div role="region" aria-label="Map search results" className="rounded-2xl border border-white/10 p-3 space-y-2 text-sm text-white">
+                {searchResults.length === 0 && <p className="text-white/60">No accessible complaints match this search.</p>}
+                {searchResults.map(complaint => <div key={complaint._id} className="break-words">
+                    {extractCoordinates(complaint) ? <button type="button" className="text-emerald-300 text-left underline" onClick={() => {
+                        setStatusFilter('All'); setCategoryFilter('All'); setPriorityFilter('All'); setDateFilter('All'); setViewMode('markers');
+                        setSelectedResult({ id: complaint._id });
+                    }}>Show {complaint.complaintId} on map — {complaint.title}</button> : <p>{complaint.complaintId} — {complaint.title}<br /><span className="text-white/60">No map pin. {complaint.location || 'Written location unavailable'}</span></p>}
+                </div>)}
+            </div>}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', padding: '10px', borderRadius: '16px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', backdropFilter: 'blur(16px)' }}>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                     <button
@@ -651,6 +697,13 @@ export default function InteractiveMap({ complaints = [], isCitizen = false }) {
                     <div style={{ fontSize: '18px', fontWeight: 700, marginTop: '4px' }}>{stats.categories}</div>
                 </div>
             </div>
+
+            {unmappedComplaintCount > 0 && (
+                <p style={{ margin: 0, color: 'rgba(255,255,255,0.5)', fontSize: '12px', lineHeight: 1.5 }}>
+                    {unmappedComplaintCount} complaint{unmappedComplaintCount === 1 ? '' : 's'} {unmappedComplaintCount === 1 ? 'does' : 'do'} not have a valid location pin yet and {unmappedComplaintCount === 1 ? 'is' : 'are'} not shown on the map.
+                </p>
+            )}
+            {tilesUnavailable && <p role="status" className="text-xs text-amber-300">Map tiles are unavailable. Complaint addresses and tracking still work.</p>}
 
             <div ref={mapContainerRef} style={{ width: '100%', flex: 1, minHeight: '300px', borderRadius: '18px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)' }} />
         </div>
