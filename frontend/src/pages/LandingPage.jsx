@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { motion, useScroll, useTransform, AnimatePresence, useInView, useMotionValue, useSpring } from 'framer-motion';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { motion as Motion, useScroll, useTransform, AnimatePresence, useInView, useMotionValue, useSpring } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import Globe from 'react-globe.gl';
 
@@ -139,7 +139,7 @@ function MagneticButton({ children, className, onClick, href }) {
     };
 
     return (
-        <motion.div
+        <Motion.div
             ref={ref}
             onMouseMove={handleMove}
             onMouseLeave={() => { x.set(0); y.set(0); }}
@@ -148,29 +148,32 @@ function MagneticButton({ children, className, onClick, href }) {
             onClick={handleClick}
         >
             {children}
-        </motion.div>
+        </Motion.div>
     );
 }
 
 // ─── Particle Field ───────────────────────────────────────────────────────────
 
+function seededParticleValue(seed) {
+    const value = Math.sin(seed * 12.9898) * 43758.5453;
+    return value - Math.floor(value);
+}
+
 function ParticleField() {
-    const particles = useRef(
-        Array.from({ length: 60 }, (_, i) => ({
+    const particles = useMemo(() => Array.from({ length: 60 }, (_, i) => ({
             id: i,
-            x: Math.random() * 100,
-            y: Math.random() * 100,
-            size: Math.random() * 3 + 1,
-            duration: Math.random() * 20 + 10,
-            delay: Math.random() * 10,
-            opacity: Math.random() * 0.4 + 0.1,
-        }))
-    ).current;
+            x: seededParticleValue(i + 1) * 100,
+            y: seededParticleValue(i + 61) * 100,
+            size: seededParticleValue(i + 121) * 3 + 1,
+            duration: seededParticleValue(i + 181) * 20 + 10,
+            delay: seededParticleValue(i + 241) * 10,
+            opacity: seededParticleValue(i + 301) * 0.4 + 0.1,
+    })), []);
 
     return (
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
             {particles.map((p) => (
-                <motion.div
+                <Motion.div
                     key={`particle-${p.id}`}
                     className="absolute rounded-full"
                     style={{
@@ -183,7 +186,7 @@ function ParticleField() {
                     }}
                     animate={{
                         y: [0, -40, 0],
-                        x: [0, Math.random() * 20 - 10, 0],
+                        x: [0, seededParticleValue(p.id + 361) * 20 - 10, 0],
                         opacity: [p.opacity, p.opacity * 1.5, p.opacity],
                     }}
                     transition={{
@@ -202,7 +205,6 @@ function ParticleField() {
 
 function IndiaGlobe() {
     const globeRef = useRef();
-    const [ready, setReady] = useState(false);
 
     // Indian cities as points
     const cities = [
@@ -242,7 +244,6 @@ function IndiaGlobe() {
             ctrl.enableZoom = false;
             ctrl.enablePan = false;
             globeRef.current.pointOfView({ lat: 22, lng: 80, altitude: 2.2 }, 0);
-            setReady(true);
         }
     }, []);
 
@@ -304,14 +305,14 @@ function IndiaGlobe() {
                 { label: '🟣 Bangalore Online', pos: 'top-1/3 right-2', delay: 2 },
                 { label: '🟡 Kolkata Live', pos: 'bottom-40 right-4', delay: 0.7 },
             ].map((chip, index) => (
-                <motion.div
+                <Motion.div
                     key={`chip-${index}`}
                     className={`absolute ${chip.pos} z-20 backdrop-blur-md bg-white/5 border border-white/10 rounded-full px-3 py-1.5 text-xs text-white/80 whitespace-nowrap pointer-events-none`}
                     animate={{ y: [0, -8, 0] }}
                     transition={{ duration: 4, delay: chip.delay, repeat: Infinity, ease: 'easeInOut' }}
                 >
                     {chip.label}
-                </motion.div>
+                </Motion.div>
             ))}
         </div>
     );
@@ -362,7 +363,7 @@ export default function LandingPage() {
             className="relative min-h-screen bg-[#03070f] text-white overflow-x-hidden">
 
             {/* ── Scroll Progress ── */}
-            <motion.div className="fixed top-0 left-0 h-0.5 bg-gradient-to-r from-emerald-500 via-blue-500 to-purple-500 z-[100]"
+            <Motion.div className="fixed top-0 left-0 h-0.5 bg-gradient-to-r from-emerald-500 via-blue-500 to-purple-500 z-[100]"
                 style={{ width: progressWidth }} />
 
             {/* ── Global Fonts ── */}
@@ -403,14 +404,14 @@ export default function LandingPage() {
             {/* ── Watch Demo Modal ── */}
             <AnimatePresence>
                 {watchDemoOpen && (
-                    <motion.div
+                    <Motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
                         onClick={() => setWatchDemoOpen(false)}
                     >
-                        <motion.div
+                        <Motion.div
                             initial={{ scale: 0.9, y: 20 }}
                             animate={{ scale: 1, y: 0 }}
                             exit={{ scale: 0.9, y: 20 }}
@@ -432,13 +433,13 @@ export default function LandingPage() {
                                     Close
                                 </button>
                             </div>
-                        </motion.div>
-                    </motion.div>
+                        </Motion.div>
+                    </Motion.div>
                 )}
             </AnimatePresence>
 
             {/* ── Navigation ── */}
-            <motion.nav
+            <Motion.nav
                 initial={{ y: -80, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
@@ -447,52 +448,52 @@ export default function LandingPage() {
                 <div className={`absolute inset-0 transition-all duration-300 ${scrolled ? 'bg-[#03070f]/90 backdrop-blur-2xl border-b border-white/5' : ''}`} />
                 <div className="relative max-w-7xl mx-auto px-6 flex items-center justify-between">
                     {/* Logo */}
-                    <motion.div
+                    <Motion.div
                         whileHover={{ scale: 1.03 }}
                         className="flex items-center gap-3 cursor-pointer"
                         onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
                     >
                         <div className="relative w-9 h-9">
                             <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-emerald-400 to-blue-600 flex items-center justify-center text-base">🌐</div>
-                            <motion.div animate={{ scale: [1, 1.4, 1], opacity: [1, 0.5, 1] }}
+                            <Motion.div animate={{ scale: [1, 1.4, 1], opacity: [1, 0.5, 1] }}
                                 transition={{ repeat: Infinity, duration: 2.5 }}
                                 className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 rounded-full border border-[#03070f]" />
                         </div>
                         <span className="text-xl font-bold tracking-tight">
                             Civic<span className="text-emerald-400">Connect</span>
                         </span>
-                    </motion.div>
+                    </Motion.div>
 
                     {/* Links */}
                     <div className="hidden lg:flex items-center gap-1">
                         {NAV_LINKS.map((item) => (
-                            <motion.button
+                            <Motion.button
                                 key={item.name}
                                 onClick={() => handleNavClick(item.id)}
                                 whileHover={{ y: -1 }}
                                 className="px-4 py-2 text-sm text-white/55 hover:text-white transition-colors rounded-lg hover:bg-white/5"
                             >
                                 {item.name}
-                            </motion.button>
+                            </Motion.button>
                         ))}
                     </div>
 
                     {/* CTAs */}
                     <div className="hidden lg:flex items-center gap-3">
                         <Link to="/login">
-                            <motion.button whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}
+                            <Motion.button whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}
                                 className="px-5 py-2 text-sm font-medium text-white/70 hover:text-white transition-colors rounded-xl hover:bg-white/5">
                                 Sign In
-                            </motion.button>
+                            </Motion.button>
                         </Link>
                         <Link to="/register">
                             <MagneticButton className="cursor-pointer">
-                                <motion.button whileTap={{ scale: 0.97 }}
+                                <Motion.button whileTap={{ scale: 0.97 }}
                                     className="relative overflow-hidden px-5 py-2.5 rounded-xl text-sm font-semibold text-white group">
                                     <span className="absolute inset-0 bg-gradient-to-r from-emerald-500 to-blue-600" />
                                     <span className="absolute inset-0 bg-gradient-to-r from-blue-600 to-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                                     <span className="relative flex items-center gap-1.5">Get Started Free <span className="group-hover:translate-x-0.5 transition-transform inline-block">→</span></span>
-                                </motion.button>
+                                </Motion.button>
                             </MagneticButton>
                         </Link>
                     </div>
@@ -502,14 +503,14 @@ export default function LandingPage() {
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
                     </button>
                 </div>
-            </motion.nav>
+            </Motion.nav>
 
             {/* ── Mobile Menu ── */}
             <AnimatePresence>
                 {mobileOpen && (
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 lg:hidden">
+                    <Motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 lg:hidden">
                         <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />
-                        <motion.div initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
+                        <Motion.div initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
                             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
                             className="absolute right-0 top-0 bottom-0 w-72 bg-[#070f1a] border-l border-white/8 p-6">
                             <div className="flex justify-between items-center mb-8">
@@ -537,8 +538,8 @@ export default function LandingPage() {
                                     <button className="w-full py-3 bg-gradient-to-r from-emerald-500 to-blue-600 rounded-xl text-sm font-semibold">Get Started Free</button>
                                 </Link>
                             </div>
-                        </motion.div>
-                    </motion.div>
+                        </Motion.div>
+                    </Motion.div>
                 )}
             </AnimatePresence>
 
@@ -550,36 +551,36 @@ export default function LandingPage() {
                     <div className="grid lg:grid-cols-2 gap-12 lg:gap-6 items-center">
 
                         {/* Left */}
-                        <motion.div initial={{ opacity: 0, x: -40 }} animate={{ opacity: 1, x: 0 }}
+                        <Motion.div initial={{ opacity: 0, x: -40 }} animate={{ opacity: 1, x: 0 }}
                             transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}>
 
                             {/* Badge */}
-                            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
+                            <Motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: 0.2 }}
                                 className="inline-flex items-center gap-2.5 glass px-4 py-2 rounded-full mb-8">
-                                <motion.span animate={{ opacity: [1, 0.4, 1] }} transition={{ repeat: Infinity, duration: 1.8 }}
+                                <Motion.span animate={{ opacity: [1, 0.4, 1] }} transition={{ repeat: Infinity, duration: 1.8 }}
                                     className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />
                                 <span className="text-sm text-white/75 font-medium">India's #1 Civic Intelligence Platform</span>
                                 <span className="text-xs text-emerald-400 font-semibold bg-emerald-400/10 px-2 py-0.5 rounded-full">LIVE</span>
-                            </motion.div>
+                            </Motion.div>
 
                             {/* Heading */}
                             <h1 className="text-5xl lg:text-[4.2rem] xl:text-7xl font-extrabold leading-[1.05] tracking-tight mb-6">
-                                <motion.span initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
-                                    className="block text-white">Bridge the Gap</motion.span>
-                                <motion.span initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }}
-                                    className="block text-gradient">Between Citizens</motion.span>
-                                <motion.span initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55 }}
-                                    className="block text-white/30">&amp; Power</motion.span>
+                                <Motion.span initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
+                                    className="block text-white">Bridge the Gap</Motion.span>
+                                <Motion.span initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }}
+                                    className="block text-gradient">Between Citizens</Motion.span>
+                                <Motion.span initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55 }}
+                                    className="block text-white/30">&amp; Power</Motion.span>
                             </h1>
 
-                            <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.65 }}
+                            <Motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.65 }}
                                 className="text-base lg:text-lg text-white/45 mb-10 max-w-md leading-relaxed" style={{ fontFamily: "'DM Sans', sans-serif" }}>
                                 AI-powered grievance tracking, real-time escalation, and transparent governance — built for 1.4 billion voices.
-                            </motion.p>
+                            </Motion.p>
 
                             {/* CTA Row */}
-                            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.75 }}
+                            <Motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.75 }}
                                 className="flex flex-wrap gap-3 mb-12">
                                 <Link to="/register">
                                     <MagneticButton className="cursor-pointer">
@@ -596,13 +597,13 @@ export default function LandingPage() {
                                 >
                                     <span className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-sm">▶</span> Watch Demo
                                 </button>
-                            </motion.div>
+                            </Motion.div>
 
                             {/* Stats Row */}
-                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.9 }}
+                            <Motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.9 }}
                                 className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                                 {STATS.map((s, i) => (
-                                    <motion.div key={s.label} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+                                    <Motion.div key={s.label} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
                                         transition={{ delay: 0.9 + i * 0.07 }}
                                         className="glass rounded-2xl p-4 card-hover cursor-default">
                                         <div className="text-2xl mb-1">{s.icon}</div>
@@ -610,17 +611,17 @@ export default function LandingPage() {
                                             <CountUp target={s.value} />+
                                         </p>
                                         <p className="text-[11px] text-white/40 leading-tight">{s.label}</p>
-                                    </motion.div>
+                                    </Motion.div>
                                 ))}
-                            </motion.div>
-                        </motion.div>
+                            </Motion.div>
+                        </Motion.div>
 
                         {/* Right – Globe */}
-                        <motion.div initial={{ opacity: 0, scale: 0.85 }} animate={{ opacity: 1, scale: 1 }}
+                        <Motion.div initial={{ opacity: 0, scale: 0.85 }} animate={{ opacity: 1, scale: 1 }}
                             transition={{ duration: 1.1, ease: [0.16, 1, 0.3, 1], delay: 0.1 }}
                             className="relative flex items-center justify-center lg:justify-end">
                             <IndiaGlobe />
-                        </motion.div>
+                        </Motion.div>
                     </div>
                 </div>
             </section>
@@ -643,18 +644,18 @@ export default function LandingPage() {
             {/* ── Trusted By ── */}
             <section className="relative z-10 py-16">
                 <div className="max-w-7xl mx-auto px-6">
-                    <motion.p initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
+                    <Motion.p initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
                         className="text-center text-white/30 text-xs font-semibold tracking-widest uppercase mb-8">
                         Trusted by leading government bodies
-                    </motion.p>
+                    </Motion.p>
                     <div className="flex flex-wrap justify-center gap-8 lg:gap-16">
                         {['Delhi Govt', 'Digital India', 'Mumbai Civic Corp', 'State Police', 'Jal Shakti'].map((name, i) => (
-                            <motion.div key={name} initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }}
+                            <Motion.div key={name} initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }}
                                 viewport={{ once: true }} transition={{ delay: i * 0.08 }}
                                 whileHover={{ opacity: 1 }}
                                 className="text-white/25 text-sm font-semibold tracking-wide hover:text-white/70 transition-colors cursor-default">
                                 {name}
-                            </motion.div>
+                            </Motion.div>
                         ))}
                     </div>
                 </div>
@@ -665,7 +666,7 @@ export default function LandingPage() {
             {/* ═══════════════════════════════════════════════ */}
             <section id="how-it-works" className="relative z-10 py-24">
                 <div className="max-w-7xl mx-auto px-6">
-                    <motion.div initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }}
+                    <Motion.div initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }}
                         viewport={{ once: true }} className="text-center mb-16">
                         <p className="text-xs font-semibold tracking-widest text-emerald-400 uppercase mb-3">Process</p>
                         <h2 className="text-4xl lg:text-5xl font-extrabold mb-4">
@@ -674,14 +675,14 @@ export default function LandingPage() {
                         <p className="text-white/40 max-w-lg mx-auto text-base" style={{ fontFamily: "'DM Sans', sans-serif" }}>
                             From complaint to resolution in four seamless steps
                         </p>
-                    </motion.div>
+                    </Motion.div>
 
                     <div className="grid md:grid-cols-4 gap-6 relative">
                         {/* Connector line */}
                         <div className="hidden md:block absolute top-10 left-[12.5%] right-[12.5%] h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
 
                         {HOW_IT_WORKS.map((step, i) => (
-                            <motion.div key={step.step} initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }}
+                            <Motion.div key={step.step} initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }}
                                 viewport={{ once: true }} transition={{ delay: i * 0.12 }}
                                 className="relative group card-hover">
                                 <div className="glass rounded-3xl p-7 h-full relative overflow-hidden">
@@ -696,7 +697,7 @@ export default function LandingPage() {
                                         <p className="text-sm text-white/45 leading-relaxed" style={{ fontFamily: "'DM Sans', sans-serif" }}>{step.desc}</p>
                                     </div>
                                 </div>
-                            </motion.div>
+                            </Motion.div>
                         ))}
                     </div>
                 </div>
@@ -707,7 +708,7 @@ export default function LandingPage() {
             {/* ═══════════════════════════════════════════════ */}
             <section id="features" className="relative z-10 py-24">
                 <div className="max-w-7xl mx-auto px-6">
-                    <motion.div initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }}
+                    <Motion.div initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }}
                         viewport={{ once: true }} className="text-center mb-16">
                         <p className="text-xs font-semibold tracking-widest text-blue-400 uppercase mb-3">Capabilities</p>
                         <h2 className="text-4xl lg:text-5xl font-extrabold mb-4">
@@ -716,11 +717,11 @@ export default function LandingPage() {
                         <p className="text-white/40 max-w-2xl mx-auto text-base" style={{ fontFamily: "'DM Sans', sans-serif" }}>
                             Cutting-edge technology engineered to make democracy more transparent and responsive
                         </p>
-                    </motion.div>
+                    </Motion.div>
 
                     <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
                         {FEATURES.map((f, i) => (
-                            <motion.div key={f.title} initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }}
+                            <Motion.div key={f.title} initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }}
                                 viewport={{ once: true }} transition={{ delay: i * 0.08 }}
                                 className="group relative card-hover">
                                 <div className="glass rounded-3xl p-8 h-full relative overflow-hidden">
@@ -746,7 +747,7 @@ export default function LandingPage() {
                                     <div className="absolute bottom-0 left-0 right-0 h-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
                                         style={{ background: `linear-gradient(90deg, transparent, ${f.color}, transparent)` }} />
                                 </div>
-                            </motion.div>
+                            </Motion.div>
                         ))}
                     </div>
                 </div>
@@ -757,7 +758,7 @@ export default function LandingPage() {
             {/* ═══════════════════════════════════════════════ */}
             <section id="leaders" className="relative z-10 py-24">
                 <div className="max-w-7xl mx-auto px-6">
-                    <motion.div initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }}
+                    <Motion.div initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }}
                         viewport={{ once: true }} className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 mb-14">
                         <div>
                             <p className="text-xs font-semibold tracking-widest text-purple-400 uppercase mb-3">Leaderboard</p>
@@ -768,7 +769,7 @@ export default function LandingPage() {
                         <p className="text-white/40 max-w-sm text-sm leading-relaxed" style={{ fontFamily: "'DM Sans', sans-serif" }}>
                             Live performance metrics of elected representatives, updated in real time from citizen reports.
                         </p>
-                    </motion.div>
+                    </Motion.div>
 
                     {/* Tab selector */}
                     <div className="flex gap-2 mb-8">
@@ -784,7 +785,7 @@ export default function LandingPage() {
 
                     <div className="grid md:grid-cols-3 gap-5">
                         {LEADERS.map((leader, i) => (
-                            <motion.div key={leader.name} initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }}
+                            <Motion.div key={leader.name} initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }}
                                 viewport={{ once: true }} transition={{ delay: i * 0.1 }}
                                 className="group relative card-hover">
                                 {i === 0 && (
@@ -830,7 +831,7 @@ export default function LandingPage() {
                                                 </span>
                                             </div>
                                             <div className="h-1.5 bg-white/8 rounded-full overflow-hidden">
-                                                <motion.div initial={{ width: 0 }} whileInView={{ width: `${(leader.resolved / 1400) * 100}%` }}
+                                                <Motion.div initial={{ width: 0 }} whileInView={{ width: `${(leader.resolved / 1400) * 100}%` }}
                                                     viewport={{ once: true }} transition={{ duration: 1.2, delay: 0.3, ease: 'easeOut' }}
                                                     className="h-full rounded-full"
                                                     style={{ background: `linear-gradient(90deg, ${leader.color}, ${leader.color}80)` }} />
@@ -857,11 +858,11 @@ export default function LandingPage() {
                                         </button>
                                     </div>
                                 </div>
-                            </motion.div>
+                            </Motion.div>
                         ))}
                     </div>
 
-                    <motion.div initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
+                    <Motion.div initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
                         className="text-center mt-8">
                         <button
                             onClick={() => navigate('/leaders')}
@@ -869,7 +870,7 @@ export default function LandingPage() {
                         >
                             View All 500+ Officials →
                         </button>
-                    </motion.div>
+                    </Motion.div>
                 </div>
             </section>
 
@@ -879,7 +880,7 @@ export default function LandingPage() {
             <section id="impact" className="relative z-10 py-24">
                 <div className="max-w-7xl mx-auto px-6">
                     <div className="grid lg:grid-cols-2 gap-12 items-center">
-                        <motion.div initial={{ opacity: 0, x: -30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}>
+                        <Motion.div initial={{ opacity: 0, x: -30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}>
                             <p className="text-xs font-semibold tracking-widest text-emerald-400 uppercase mb-3">Impact</p>
                             <h2 className="text-4xl lg:text-5xl font-extrabold mb-6">
                                 Real Change, <span className="text-gradient">Real Numbers</span>
@@ -895,22 +896,22 @@ export default function LandingPage() {
                                     { label: 'Spam reduction', value: '99.8', unit: '%', icon: '🛡️' },
                                     { label: 'Officials onboarded', value: '500', unit: '+', icon: '🏛️' },
                                 ].map((item, i) => (
-                                    <motion.div key={item.label} initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }}
+                                    <Motion.div key={item.label} initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }}
                                         viewport={{ once: true }} transition={{ delay: i * 0.1 }}
                                         className="glass rounded-2xl p-5 card-hover">
                                         <div className="text-2xl mb-2">{item.icon}</div>
                                         <p className="text-3xl font-extrabold text-gradient">{item.value}<span className="text-lg">{item.unit}</span></p>
                                         <p className="text-xs text-white/40 mt-1 leading-tight" style={{ fontFamily: "'DM Sans', sans-serif" }}>{item.label}</p>
-                                    </motion.div>
+                                    </Motion.div>
                                 ))}
                             </div>
-                        </motion.div>
+                        </Motion.div>
 
                         {/* Testimonials */}
-                        <motion.div initial={{ opacity: 0, x: 30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}
+                        <Motion.div initial={{ opacity: 0, x: 30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}
                             className="space-y-4">
                             {TESTIMONIALS.map((t, i) => (
-                                <motion.div key={t.name} initial={{ opacity: 0, x: 20 }} whileInView={{ opacity: 1, x: 0 }}
+                                <Motion.div key={t.name} initial={{ opacity: 0, x: 20 }} whileInView={{ opacity: 1, x: 0 }}
                                     viewport={{ once: true }} transition={{ delay: i * 0.12 }}
                                     className="glass rounded-3xl p-6 card-hover">
                                     <div className="flex items-start gap-4">
@@ -932,7 +933,7 @@ export default function LandingPage() {
                                             <p className="text-sm text-white/60 leading-relaxed" style={{ fontFamily: "'DM Sans', sans-serif" }}>"{t.text}"</p>
                                         </div>
                                     </div>
-                                </motion.div>
+                                </Motion.div>
                             ))}
 
                             <div className="flex items-center gap-3 px-2 pt-2">
@@ -943,7 +944,7 @@ export default function LandingPage() {
                                 </div>
                                 <p className="text-xs text-white/40"><span className="text-white font-semibold">10,000+</span> verified citizens already reporting</p>
                             </div>
-                        </motion.div>
+                        </Motion.div>
                     </div>
                 </div>
             </section>
@@ -953,7 +954,7 @@ export default function LandingPage() {
             {/* ═══════════════════════════════════════════════ */}
             <section className="relative z-10 py-24">
                 <div className="max-w-7xl mx-auto px-6">
-                    <motion.div initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }}
+                    <Motion.div initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }}
                         viewport={{ once: true }}
                         className="relative rounded-[2rem] overflow-hidden">
 
@@ -975,11 +976,11 @@ export default function LandingPage() {
                         </svg>
 
                         <div className="relative z-10 text-center py-20 px-6 max-w-3xl mx-auto">
-                            <motion.div initial={{ opacity: 0, scale: 0.9 }} whileInView={{ opacity: 1, scale: 1 }}
+                            <Motion.div initial={{ opacity: 0, scale: 0.9 }} whileInView={{ opacity: 1, scale: 1 }}
                                 viewport={{ once: true }}
                                 className="inline-flex items-center gap-2 glass px-4 py-2 rounded-full mb-8 text-sm text-emerald-400 font-medium">
                                 🇮🇳 Join the Civic Revolution
-                            </motion.div>
+                            </Motion.div>
 
                             <h2 className="text-4xl lg:text-6xl font-extrabold mb-6">
                                 Ready to Make a <span className="text-gradient">Difference?</span>
@@ -1010,7 +1011,7 @@ export default function LandingPage() {
                                 No credit card required · Free for citizens · Aadhaar verified
                             </p>
                         </div>
-                    </motion.div>
+                    </Motion.div>
                 </div>
             </section>
 
