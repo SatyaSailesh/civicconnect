@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion as Motion, useScroll, useTransform, AnimatePresence, useInView, useMotionValue, useSpring } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import Globe from 'react-globe.gl';
@@ -154,21 +154,19 @@ function MagneticButton({ children, className, onClick, href }) {
 
 // ─── Particle Field ───────────────────────────────────────────────────────────
 
-function seededParticleValue(seed) {
-    const value = Math.sin(seed * 12.9898) * 43758.5453;
-    return value - Math.floor(value);
-}
+const PARTICLES = Array.from({ length: 60 }, (_, i) => ({
+            id: i,
+            x: Math.random() * 100,
+            y: Math.random() * 100,
+            size: Math.random() * 3 + 1,
+            duration: Math.random() * 20 + 10,
+            delay: Math.random() * 10,
+            opacity: Math.random() * 0.4 + 0.1,
+            xOffset: Math.random() * 20 - 10,
+}));
 
 function ParticleField() {
-    const particles = useMemo(() => Array.from({ length: 60 }, (_, i) => ({
-            id: i,
-            x: seededParticleValue(i + 1) * 100,
-            y: seededParticleValue(i + 61) * 100,
-            size: seededParticleValue(i + 121) * 3 + 1,
-            duration: seededParticleValue(i + 181) * 20 + 10,
-            delay: seededParticleValue(i + 241) * 10,
-            opacity: seededParticleValue(i + 301) * 0.4 + 0.1,
-    })), []);
+    const particles = PARTICLES;
 
     return (
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -186,7 +184,7 @@ function ParticleField() {
                     }}
                     animate={{
                         y: [0, -40, 0],
-                        x: [0, seededParticleValue(p.id + 361) * 20 - 10, 0],
+                        x: [0, p.xOffset, 0],
                         opacity: [p.opacity, p.opacity * 1.5, p.opacity],
                     }}
                     transition={{
