@@ -203,6 +203,8 @@ function ParticleField() {
 
 function IndiaGlobe() {
     const globeRef = useRef();
+    const containerRef = useRef();
+    const [globeSize, setGlobeSize] = useState(520);
 
     // Indian cities as points
     const cities = [
@@ -245,8 +247,18 @@ function IndiaGlobe() {
         }
     }, []);
 
+    useEffect(() => {
+        if (!containerRef.current) return undefined;
+        const observer = new ResizeObserver(([entry]) => {
+            const nextSize = Math.min(520, Math.floor(entry.contentRect.width));
+            if (nextSize > 0) setGlobeSize((currentSize) => currentSize === nextSize ? currentSize : nextSize);
+        });
+        observer.observe(containerRef.current);
+        return () => observer.disconnect();
+    }, []);
+
     return (
-        <div className="relative h-[580px] flex items-center justify-center">
+        <div ref={containerRef} className="relative h-[580px] w-full min-w-0 flex items-center justify-center">
             {/* Glow rings behind globe */}
             <div className="absolute w-[440px] h-[440px] rounded-full bg-emerald-500/8 blur-3xl pointer-events-none" />
             <div className="absolute w-[320px] h-[320px] rounded-full bg-blue-500/10 blur-2xl pointer-events-none" />
@@ -259,12 +271,12 @@ function IndiaGlobe() {
 
             <Globe
                 ref={globeRef}
-                globeImageUrl="//unpkg.com/three-globe/example/img/earth-night.jpg"
-                bumpImageUrl="//unpkg.com/three-globe/example/img/earth-topology.png"
+                globeImageUrl="/globe/earth-night.jpg"
+                bumpImageUrl="/globe/earth-topology.png"
                 backgroundImageUrl={null}
                 backgroundColor="rgba(0,0,0,0)"
-                width={520}
-                height={520}
+                width={globeSize}
+                height={globeSize}
                 // Points — city dots
                 pointsData={cities}
                 pointLat="lat"
@@ -617,7 +629,7 @@ export default function LandingPage() {
                         {/* Right – Globe */}
                         <Motion.div initial={{ opacity: 0, scale: 0.85 }} animate={{ opacity: 1, scale: 1 }}
                             transition={{ duration: 1.1, ease: [0.16, 1, 0.3, 1], delay: 0.1 }}
-                            className="relative flex items-center justify-center lg:justify-end">
+                            className="relative flex w-full min-w-0 items-center justify-center lg:justify-end">
                             <IndiaGlobe />
                         </Motion.div>
                     </div>
