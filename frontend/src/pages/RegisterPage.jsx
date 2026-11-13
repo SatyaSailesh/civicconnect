@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { motion, AnimatePresence, useMotionValue, useSpring } from 'framer-motion';
+import { useAuth } from '../context/auth';
+import { motion as Motion, AnimatePresence, useMotionValue, useSpring } from 'framer-motion';
 
 // ─── Magnetic Button ──────────────────────────────────────────────────────────
 function MagneticButton({ children, className }) {
@@ -12,7 +12,7 @@ function MagneticButton({ children, className }) {
     const sy = useSpring(y, { stiffness: 300, damping: 20 });
 
     return (
-        <motion.div
+        <Motion.div
             ref={ref}
             onMouseMove={(e) => {
                 const r = ref.current.getBoundingClientRect();
@@ -24,29 +24,29 @@ function MagneticButton({ children, className }) {
             className={className}
         >
             {children}
-        </motion.div>
+        </Motion.div>
     );
 }
 
 // ─── Particles ────────────────────────────────────────────────────────────────
 function ParticleField() {
-    const particles = useRef(
+    const [particles] = useState(() =>
         Array.from({ length: 35 }, (_, i) => ({
             id: i,
-            x: Math.random() * 100,
-            y: Math.random() * 100,
-            size: Math.random() * 2.5 + 1,
-            duration: Math.random() * 18 + 10,
-            delay: Math.random() * 8,
-            opacity: Math.random() * 0.35 + 0.08,
+            x: (((i + 1) * 30) % 101 / 101) * 100,
+            y: (((i + 1) * 47) % 101 / 101) * 100,
+            size: (((i + 1) * 64) % 101 / 101) * 2.5 + 1,
+            duration: (((i + 1) * 81) % 101 / 101) * 18 + 10,
+            delay: (((i + 1) * 98) % 101 / 101) * 8,
+            opacity: (((i + 1) * 115) % 101 / 101) * 0.35 + 0.08,
             color: i % 3 === 0 ? '#10b981' : i % 3 === 1 ? '#3b82f6' : '#8b5cf6',
         }))
-    ).current;
+    );
 
     return (
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
             {particles.map((p) => (
-                <motion.div key={p.id} className="absolute rounded-full"
+                <Motion.div key={p.id} className="absolute rounded-full"
                     style={{ left: `${p.x}%`, top: `${p.y}%`, width: p.size, height: p.size, background: p.color, opacity: p.opacity }}
                     animate={{ y: [0, -35, 0], x: [0, (p.id % 2 === 0 ? 1 : -1) * 10, 0], opacity: [p.opacity, p.opacity * 1.6, p.opacity] }}
                     transition={{ duration: p.duration, delay: p.delay, repeat: Infinity, ease: 'easeInOut' }}
@@ -71,12 +71,12 @@ function PasswordStrength({ password }) {
     if (!password) return null;
 
     return (
-        <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
+        <Motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }} className="mt-3 space-y-2">
             <div className="flex gap-1.5">
                 {[0, 1, 2, 3].map(i => (
                     <div key={i} className="flex-1 h-1 rounded-full overflow-hidden bg-white/8">
-                        <motion.div className="h-full rounded-full"
+                        <Motion.div className="h-full rounded-full"
                             initial={{ width: 0 }}
                             animate={{ width: i < score ? '100%' : '0%' }}
                             transition={{ duration: 0.3, delay: i * 0.05 }}
@@ -97,29 +97,29 @@ function PasswordStrength({ password }) {
                     <span className="text-[10px] font-bold" style={{ color: colors[score - 1] }}>{labels[score - 1]}</span>
                 )}
             </div>
-        </motion.div>
+        </Motion.div>
     );
 }
 
 // ─── Role Card ────────────────────────────────────────────────────────────────
 function RoleCard({ value, label, description, icon, selected, onSelect }) {
     return (
-        <motion.button type="button" onClick={() => onSelect(value)} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+        <Motion.button type="button" onClick={() => onSelect(value)} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
             className="relative flex-1 p-4 rounded-2xl border text-left transition-all duration-200 overflow-hidden"
             style={{
                 background: selected ? 'rgba(16,185,129,0.08)' : 'rgba(255,255,255,0.03)',
                 borderColor: selected ? 'rgba(16,185,129,0.4)' : 'rgba(255,255,255,0.08)',
             }}>
             {selected && (
-                <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}
+                <Motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}
                     className="absolute top-2.5 right-2.5 w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center text-[9px] font-bold text-white">
                     ✓
-                </motion.div>
+                </Motion.div>
             )}
             <div className="text-2xl mb-2">{icon}</div>
             <p className="text-sm font-bold text-white mb-0.5">{label}</p>
             <p className="text-[11px] text-white/35 leading-tight" style={{ fontFamily: "'DM Sans', sans-serif" }}>{description}</p>
-        </motion.button>
+        </Motion.button>
     );
 }
 
@@ -130,7 +130,7 @@ function StepIndicator({ step, total }) {
             {Array.from({ length: total }, (_, i) => (
                 <div key={i} className="flex items-center gap-2">
                     <div className="relative">
-                        <motion.div
+                        <Motion.div
                             animate={{ scale: i === step ? 1 : 0.85, opacity: i === step ? 1 : i < step ? 0.8 : 0.3 }}
                             className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold"
                             style={{
@@ -139,7 +139,7 @@ function StepIndicator({ step, total }) {
                                 color: i <= step ? 'white' : 'rgba(255,255,255,0.3)',
                             }}>
                             {i < step ? '✓' : i + 1}
-                        </motion.div>
+                        </Motion.div>
                     </div>
                     {i < total - 1 && (
                         <div className="w-8 h-px" style={{ background: i < step ? '#10b981' : 'rgba(255,255,255,0.1)' }} />
@@ -190,7 +190,8 @@ export default function RegisterPage() {
         setLoading(true);
         setError('');
         try {
-            const { confirmPassword, ...payload } = form;
+            const payload = { ...form };
+            delete payload.confirmPassword;
             const result = await register(payload);
             // Admin accounts return pendingApproval=true — no token issued
             if (result?.pendingApproval) {
@@ -253,7 +254,7 @@ export default function RegisterPage() {
             <div className="relative z-10 w-full max-w-5xl mx-auto px-6 py-12 grid lg:grid-cols-2 gap-12 items-center min-h-screen">
 
                 {/* ── LEFT — Branding ── */}
-                <motion.div initial={{ opacity: 0, x: -40 }} animate={{ opacity: 1, x: 0 }}
+                <Motion.div initial={{ opacity: 0, x: -40 }} animate={{ opacity: 1, x: 0 }}
                     transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
                     className="hidden lg:flex flex-col justify-center">
 
@@ -261,7 +262,7 @@ export default function RegisterPage() {
                     <Link to="/" className="inline-flex items-center gap-3 mb-14 group w-fit">
                         <div className="relative w-10 h-10">
                             <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-400 to-blue-600 flex items-center justify-center text-lg">🌐</div>
-                            <motion.div animate={{ scale: [1, 1.4, 1], opacity: [1, 0.5, 1] }} transition={{ repeat: Infinity, duration: 2.5 }}
+                            <Motion.div animate={{ scale: [1, 1.4, 1], opacity: [1, 0.5, 1] }} transition={{ repeat: Infinity, duration: 2.5 }}
                                 className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 rounded-full border border-[#03070f]" />
                         </div>
                         <span className="text-xl font-bold tracking-tight group-hover:text-emerald-400 transition-colors">
@@ -290,12 +291,12 @@ export default function RegisterPage() {
                         </p>
                         <div className="space-y-2.5">
                             {BENEFITS[form.role].map((b, i) => (
-                                <motion.div key={b} initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }}
+                                <Motion.div key={b} initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }}
                                     transition={{ delay: i * 0.08 }}
                                     className="flex items-center gap-3 glass rounded-2xl px-4 py-3">
                                     <span className="w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-[10px] text-emerald-400 flex-shrink-0">✓</span>
                                     <span className="text-sm text-white/60" style={{ fontFamily: "'DM Sans', sans-serif" }}>{b}</span>
-                                </motion.div>
+                                </Motion.div>
                             ))}
                         </div>
                     </div>
@@ -311,10 +312,10 @@ export default function RegisterPage() {
                             <span className="text-white font-semibold">10,000+</span> citizens already making a difference
                         </p>
                     </div>
-                </motion.div>
+                </Motion.div>
 
                 {/* ── RIGHT — Form ── */}
-                <motion.div initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }}
+                <Motion.div initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }}
                     transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1], delay: 0.1 }}
                     className="w-full max-w-md mx-auto lg:mx-0 lg:ml-auto">
 
@@ -332,12 +333,12 @@ export default function RegisterPage() {
 
                             {/* Header */}
                             <div className="mb-7">
-                                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
+                                <Motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
                                     className="inline-flex items-center gap-2 glass px-3 py-1.5 rounded-full mb-5 text-xs text-emerald-400 font-medium">
-                                    <motion.span animate={{ opacity: [1, 0.3, 1] }} transition={{ repeat: Infinity, duration: 1.5 }}
+                                    <Motion.span animate={{ opacity: [1, 0.3, 1] }} transition={{ repeat: Infinity, duration: 1.5 }}
                                         className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
                                     Create Free Account
-                                </motion.div>
+                                </Motion.div>
                                 <h2 className="text-3xl font-extrabold tracking-tight mb-1.5">
                                     {success ? 'You\'re in! 🎉' : STEP_TITLES[step]}
                                 </h2>
@@ -352,44 +353,44 @@ export default function RegisterPage() {
                             {/* Error */}
                             <AnimatePresence>
                                 {error && (
-                                    <motion.div initial={{ opacity: 0, height: 0, marginBottom: 0 }} animate={{ opacity: 1, height: 'auto', marginBottom: 20 }}
+                                    <Motion.div initial={{ opacity: 0, height: 0, marginBottom: 0 }} animate={{ opacity: 1, height: 'auto', marginBottom: 20 }}
                                         exit={{ opacity: 0, height: 0, marginBottom: 0 }} className="overflow-hidden">
                                         <div className="flex items-start gap-3 p-4 rounded-2xl bg-red-500/8 border border-red-500/20">
                                             <span className="text-red-400 text-base mt-0.5 flex-shrink-0">⚠</span>
                                             <p className="text-red-400 text-sm" style={{ fontFamily: "'DM Sans', sans-serif" }}>{error}</p>
                                         </div>
-                                    </motion.div>
+                                    </Motion.div>
                                 )}
                             </AnimatePresence>
 
                             {/* ── SUCCESS ── */}
                             <AnimatePresence>
                                 {success && (
-                                    <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+                                    <Motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
                                         className="flex flex-col items-center justify-center py-10 gap-4">
-                                        <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}
+                                        <Motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}
                                             transition={{ type: 'spring', stiffness: 300, damping: 18 }}
                                             className="w-20 h-20 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-4xl">
                                             ✓
-                                        </motion.div>
+                                        </Motion.div>
                                         <div className="text-center">
                                             <p className="font-semibold text-emerald-400 text-lg">Account Created!</p>
                                             <p className="text-xs text-white/35 mt-1" style={{ fontFamily: "'DM Sans', sans-serif" }}>
                                                 Welcome to CivicConnect, {form.name.split(' ')[0]}
                                             </p>
                                         </div>
-                                        <motion.div className="w-48 h-1 rounded-full bg-white/8 overflow-hidden">
-                                            <motion.div className="h-full bg-gradient-to-r from-emerald-500 to-blue-600 rounded-full"
+                                        <Motion.div className="w-48 h-1 rounded-full bg-white/8 overflow-hidden">
+                                            <Motion.div className="h-full bg-gradient-to-r from-emerald-500 to-blue-600 rounded-full"
                                                 initial={{ width: 0 }} animate={{ width: '100%' }} transition={{ duration: 1 }} />
-                                        </motion.div>
-                                    </motion.div>
+                                        </Motion.div>
+                                    </Motion.div>
                                 )}
                             </AnimatePresence>
 
                             {/* ── STEP 0: Identity ── */}
                             <AnimatePresence mode="wait">
                                 {!success && step === 0 && (
-                                    <motion.form key="step0" initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }}
+                                    <Motion.form key="step0" initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }}
                                         exit={{ opacity: 0, x: -24 }} transition={{ duration: 0.28 }}
                                         onSubmit={nextStep} className="space-y-5">
 
@@ -435,12 +436,12 @@ export default function RegisterPage() {
                                                 </span>
                                             </button>
                                         </MagneticButton>
-                                    </motion.form>
+                                    </Motion.form>
                                 )}
 
                                 {/* ── STEP 1: Password ── */}
                                 {!success && step === 1 && (
-                                    <motion.form key="step1" initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }}
+                                    <Motion.form key="step1" initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }}
                                         exit={{ opacity: 0, x: -24 }} transition={{ duration: 0.28 }}
                                         onSubmit={nextStep} className="space-y-5">
 
@@ -488,10 +489,10 @@ export default function RegisterPage() {
                                         </div>
 
                                         <div className="flex gap-3 pt-1">
-                                            <motion.button type="button" onClick={() => setStep(0)} whileTap={{ scale: 0.97 }}
+                                            <Motion.button type="button" onClick={() => setStep(0)} whileTap={{ scale: 0.97 }}
                                                 className="flex-1 py-4 glass rounded-2xl font-semibold text-sm text-white/60 hover:text-white transition-colors">
                                                 ← Back
-                                            </motion.button>
+                                            </Motion.button>
                                             <MagneticButton className="flex-[2] cursor-pointer">
                                                 <button type="submit"
                                                     className="relative w-full py-4 rounded-2xl font-bold text-base overflow-hidden group">
@@ -503,12 +504,12 @@ export default function RegisterPage() {
                                                 </button>
                                             </MagneticButton>
                                         </div>
-                                    </motion.form>
+                                    </Motion.form>
                                 )}
 
                                 {/* ── STEP 2: Role ── */}
                                 {!success && step === 2 && (
-                                    <motion.form key="step2" initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }}
+                                    <Motion.form key="step2" initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }}
                                         exit={{ opacity: 0, x: -24 }} transition={{ duration: 0.28 }}
                                         onSubmit={handleSubmit} className="space-y-5">
 
@@ -522,7 +523,7 @@ export default function RegisterPage() {
                                         </div>
 
                                         {/* Role info */}
-                                        <motion.div key={form.role}
+                                        <Motion.div key={form.role}
                                             initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
                                             className="glass rounded-2xl p-4">
                                             <p className="text-xs text-white/40 leading-relaxed" style={{ fontFamily: "'DM Sans', sans-serif" }}>
@@ -530,11 +531,11 @@ export default function RegisterPage() {
                                                     ? '🔹 You\'ll be able to file complaints, track escalations, and rate your elected officials after verification.'
                                                     : '🔐 Official accounts are restricted. You need an authority verification code issued by your department administrator. Your account will be reviewed before activation.'}
                                             </p>
-                                        </motion.div>
+                                        </Motion.div>
 
                                         {/* Admin secret code — only shown when admin role selected */}
                                         {form.role === 'admin' && (
-                                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
+                                            <Motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
                                                 exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.25 }}>
                                                 <label className="block text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-400/70 mb-2"
                                                     style={{ fontFamily: "'DM Sans', sans-serif" }}>
@@ -558,7 +559,7 @@ export default function RegisterPage() {
                                                 <p className="text-[10px] text-amber-400/40 mt-1.5 px-1" style={{ fontFamily: "'DM Sans', sans-serif" }}>
                                                     This code is provided by your department. Unauthorised access attempts are logged.
                                                 </p>
-                                            </motion.div>
+                                            </Motion.div>
                                         )}
 
                                         {/* Terms */}
@@ -576,10 +577,10 @@ export default function RegisterPage() {
                                         </div>
 
                                         <div className="flex gap-3 pt-1">
-                                            <motion.button type="button" onClick={() => setStep(1)} whileTap={{ scale: 0.97 }}
+                                            <Motion.button type="button" onClick={() => setStep(1)} whileTap={{ scale: 0.97 }}
                                                 className="flex-1 py-4 glass rounded-2xl font-semibold text-sm text-white/60 hover:text-white transition-colors">
                                                 ← Back
-                                            </motion.button>
+                                            </Motion.button>
                                             <MagneticButton className="flex-[2] cursor-pointer">
                                                 <button type="submit" disabled={loading}
                                                     className="relative w-full py-4 rounded-2xl font-bold text-base overflow-hidden disabled:opacity-60 group">
@@ -588,7 +589,7 @@ export default function RegisterPage() {
                                                     <span className="relative z-10 flex items-center justify-center gap-2">
                                                         {loading ? (
                                                             <>
-                                                                <motion.span animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 0.8, ease: 'linear' }}
+                                                                <Motion.span animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 0.8, ease: 'linear' }}
                                                                     className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full inline-block" />
                                                                 Creating Account…
                                                             </>
@@ -599,7 +600,7 @@ export default function RegisterPage() {
                                                 </button>
                                             </MagneticButton>
                                         </div>
-                                    </motion.form>
+                                    </Motion.form>
                                 )}
                             </AnimatePresence>
 
@@ -618,11 +619,11 @@ export default function RegisterPage() {
                     </div>
 
                     {/* Security note */}
-                    <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.7 }}
+                    <Motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.7 }}
                         className="text-center text-xs text-white/20 mt-5" style={{ fontFamily: "'DM Sans', sans-serif" }}>
-                        🔒 256-bit encrypted · CERT-In compliant · No data sold
-                    </motion.p>
-                </motion.div>
+                        Portfolio demo · Synthetic verification · Private complaints by default
+                    </Motion.p>
+                </Motion.div>
             </div>
         </div>
     );

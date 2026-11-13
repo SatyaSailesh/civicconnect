@@ -1,7 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useEffect } from 'react';
+import { motion as Motion, AnimatePresence } from 'framer-motion';
 import api from '../services/api';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/auth';
+import LocationPicker from './LocationPicker';
+import DuplicateSuggestions from './DuplicateSuggestions';
 
 const CATEGORIES = ['Infrastructure', 'Corruption', 'Scam', 'Public Service'];
 const CATEGORY_ICONS = {
@@ -50,7 +52,30 @@ export default function NewComplaintModal({ isOpen, onClose, onSuccess }) {
     const [focusedField, setFocusedField] = useState(null);
     const [locState, setLocState] = useState('idle'); // idle | detecting | detected | manual | error
     const [locError, setLocError] = useState('');
+    const [pinPickerOpen, setPinPickerOpen] = useState(false);
+    const [duplicates, setDuplicates] = useState(null);
+    const [duplicateKey, setDuplicateKey] = useState('');
+    const [continuedKey, setContinuedKey] = useState('');
+    const [checkingDuplicates, setCheckingDuplicates] = useState(false);
+    const [duplicateError, setDuplicateError] = useState(false);
     const { user } = useAuth();
+    const [capabilities, setCapabilities] = useState(null);
+    useEffect(() => {
+        if (isOpen) api.get('/capabilities').then(({ data }) => setCapabilities(data)).catch(() => setCapabilities(null));
+    }, [isOpen]);
+    useEffect(() => {
+        let active = true;
+        const timer = setTimeout(async () => {
+            if (!isOpen || form.lat == null || form.lng == null) { setDuplicates(null); setDuplicateKey(''); return; }
+            setCheckingDuplicates(true); setDuplicateError(false);
+            try {
+                const { data } = await api.get('/complaints/duplicates', { params: { category: form.category, lat: form.lat, lng: form.lng } });
+                if (active) { setDuplicates(data); setDuplicateKey(JSON.stringify([form.category, Number(form.lat), Number(form.lng)])); }
+            } catch { if (active) { setDuplicates(null); setDuplicateError(true); } }
+            finally { if (active) setCheckingDuplicates(false); }
+        }, 350);
+        return () => { active = false; clearTimeout(timer); };
+    }, [isOpen, form.lat, form.lng, form.category]);
 
     if (!isOpen) return null;
 
@@ -58,7 +83,7 @@ export default function NewComplaintModal({ isOpen, onClose, onSuccess }) {
     if (user?.role === 'citizen' && !user?.aadhaarVerified) {
         return (
             <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+                <Motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
                     className="max-w-md w-full rounded-3xl p-10 text-center"
                     style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', backdropFilter: 'blur(20px)' }}>
                     <div className="w-16 h-16 rounded-2xl mx-auto mb-6 flex items-center justify-center text-3xl"
@@ -69,7 +94,7 @@ export default function NewComplaintModal({ isOpen, onClose, onSuccess }) {
                     </p>
                     <button onClick={onClose} className="text-sm text-white/40 hover:text-white/70 transition-colors"
                         style={{ fontFamily: "'DM Sans',sans-serif" }}>Cancel</button>
-                </motion.div>
+                </Motion.div>
             </div>
         );
     }
@@ -126,6 +151,9 @@ export default function NewComplaintModal({ isOpen, onClose, onSuccess }) {
     // ── Image upload ──
     const handleImageUpload = (e) => {
         const files = Array.from(e.target.files);
+        if (files.some(file => file.size > 5 * 1024 * 1024 || !['image/jpeg', 'image/png', 'image/webp'].includes(file.type))) {
+            setError('Use JPEG, PNG or WebP images, each 5 MB or smaller.'); return;
+        }
         if (images.length + files.length > 2) { setError('Maximum 2 images allowed'); return; }
         setImages(prev => [...prev, ...files.map(f => ({ file: f, preview: URL.createObjectURL(f) }))]);
     };
@@ -138,7 +166,7 @@ export default function NewComplaintModal({ isOpen, onClose, onSuccess }) {
             setError('Title and description are required.');
             return;
         }
-        if (!form.city && !form.exactAddress) {
+        if (!form.street.trim() && !form.exactAddress.trim()) {
             setError('Please add a location — use auto-detect or enter manually.');
             return;
         }
@@ -147,6 +175,23 @@ export default function NewComplaintModal({ isOpen, onClose, onSuccess }) {
             const locationStr = [form.exactAddress || form.street, form.city, form.district, form.state, form.pincode]
                 .filter(Boolean).join(', ');
 
+            let lat = form.lat == null || form.lat === '' ? NaN : Number(form.lat);
+            let lng = form.lng == null || form.lng === '' ? NaN : Number(form.lng);
+            if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+                // A written address remains usable when the optional map service is offline.
+                const geocoded = await geocodeAddress(locationStr).catch(() => null);
+                if (geocoded) ({ lat, lng } = geocoded);
+            }
+
+            if (Number.isFinite(lat) && Number.isFinite(lng)) {
+                const key = JSON.stringify([form.category, lat, lng]);
+                const matches = duplicateKey === key ? duplicates : await api.get('/complaints/duplicates', { params: { category: form.category, lat, lng } }).then(response => response.data).catch(() => null);
+                if (matches?.matches.length && continuedKey !== key) {
+                    setForm(previous => ({ ...previous, lat, lng })); setDuplicates(matches); setDuplicateKey(key);
+                    setError('Review possible matches below, or choose Continue with a new report.');
+                    return;
+                }
+            }
             // Send as FormData so multer can handle image files on the backend
             const formData = new FormData();
             formData.append('title', form.title.trim());
@@ -158,22 +203,24 @@ export default function NewComplaintModal({ isOpen, onClose, onSuccess }) {
             formData.append('state', form.state || '');
             formData.append('pincode', form.pincode || '');
             formData.append('isPublic', String(form.isPublic));
-            if (form.lat) formData.append('lat', form.lat);
-            if (form.lng) formData.append('lng', form.lng);
+            if (Number.isFinite(lat)) formData.append('lat', String(lat));
+            if (Number.isFinite(lng)) formData.append('lng', String(lng));
             // Append actual image files for multer
             images.forEach(img => { if (img.file) formData.append('images', img.file); });
 
-            await api.post('/complaints', formData, {
+            const { data } = await api.post('/complaints', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' },
             });
             setForm({ title: '', description: '', category: 'Infrastructure', exactAddress: '', street: '', city: '', district: '', state: '', pincode: '', lat: null, lng: null, isPublic: false });
             setImages([]);
             setLocState('idle');
-            onSuccess();
+            setPinPickerOpen(false);
+            setDuplicates(null); setContinuedKey(''); setDuplicateKey('');
+            onSuccess(data);
             onClose();
         } catch (err) {
             console.error('Complaint error:', err.response?.data || err.message);
-            setError(err.response?.data?.message || 'Failed to create complaint. Please try again.');
+            setError(err.response?.data?.message || err.message || 'Failed to create complaint. Please try again.');
         } finally {
             setLoading(false);
         }
@@ -193,7 +240,6 @@ export default function NewComplaintModal({ isOpen, onClose, onSuccess }) {
         boxShadow: focusedField === field ? '0 0 0 3px rgba(16,185,129,0.08)' : 'none',
     });
 
-    const locationDetected = locState === 'detected';
 
     return (
         <AnimatePresence>
@@ -203,7 +249,7 @@ export default function NewComplaintModal({ isOpen, onClose, onSuccess }) {
 
                 <div className="absolute inset-0" onClick={onClose} />
 
-                <motion.div
+                <Motion.div
                     initial={{ scale: 0.94, opacity: 0, y: 16 }}
                     animate={{ scale: 1, opacity: 1, y: 0 }}
                     exit={{ scale: 0.94, opacity: 0, y: 16 }}
@@ -217,15 +263,15 @@ export default function NewComplaintModal({ isOpen, onClose, onSuccess }) {
                         style={{ background: 'rgba(10,16,30,0.97)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                         <div>
                             <div className="inline-flex items-center gap-2 text-xs text-emerald-400 font-medium mb-1">
-                                <motion.span animate={{ opacity: [1, 0.3, 1] }} transition={{ repeat: Infinity, duration: 1.8 }}
+                                <Motion.span animate={{ opacity: [1, 0.3, 1] }} transition={{ repeat: Infinity, duration: 1.8 }}
                                     className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
                                 New Complaint
                             </div>
                             <h2 className="text-xl font-extrabold text-white tracking-tight">File a Grievance</h2>
                         </div>
-                        <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={onClose}
+                        <Motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={onClose}
                             className="w-8 h-8 rounded-xl flex items-center justify-center text-white/50 hover:text-white"
-                            style={{ background: 'rgba(255,255,255,0.06)' }}>✕</motion.button>
+                            style={{ background: 'rgba(255,255,255,0.06)' }}>✕</Motion.button>
                     </div>
 
                     {/* ── Form ── */}
@@ -234,13 +280,13 @@ export default function NewComplaintModal({ isOpen, onClose, onSuccess }) {
                         {/* Error banner */}
                         <AnimatePresence>
                             {error && (
-                                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
+                                <Motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
                                     exit={{ opacity: 0, height: 0 }}
                                     className="flex items-start gap-3 p-3.5 rounded-2xl overflow-hidden"
                                     style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
                                     <span className="text-red-400 flex-shrink-0">⚠</span>
                                     <p className="text-red-400 text-sm" style={{ fontFamily: "'DM Sans',sans-serif" }}>{error}</p>
-                                </motion.div>
+                                </Motion.div>
                             )}
                         </AnimatePresence>
 
@@ -260,7 +306,7 @@ export default function NewComplaintModal({ isOpen, onClose, onSuccess }) {
                                 style={{ fontFamily: "'DM Sans',sans-serif" }}>Category *</label>
                             <div className="grid grid-cols-2 gap-2">
                                 {CATEGORIES.map(cat => (
-                                    <motion.button key={cat} type="button" whileTap={{ scale: 0.97 }}
+                                    <Motion.button key={cat} type="button" whileTap={{ scale: 0.97 }}
                                         onClick={() => setForm(f => ({ ...f, category: cat }))}
                                         className="flex items-center gap-2.5 px-4 py-3 rounded-2xl text-sm font-medium text-left transition-all duration-200"
                                         style={{
@@ -271,7 +317,7 @@ export default function NewComplaintModal({ isOpen, onClose, onSuccess }) {
                                         }}>
                                         <span className="text-base">{CATEGORY_ICONS[cat]}</span> {cat}
                                         {form.category === cat && <span className="ml-auto text-[10px]">✓</span>}
-                                    </motion.button>
+                                    </Motion.button>
                                 ))}
                             </div>
                         </div>
@@ -299,7 +345,7 @@ export default function NewComplaintModal({ isOpen, onClose, onSuccess }) {
                             {/* Auto-detect button */}
                             {locState === 'idle' || locState === 'error' ? (
                                 <div className="space-y-3">
-                                    <motion.button type="button" whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.97 }}
+                                    <Motion.button type="button" whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.97 }}
                                         onClick={detectLocation}
                                         className="w-full flex items-center justify-center gap-3 py-3.5 rounded-2xl font-semibold text-sm transition-all"
                                         style={{
@@ -311,14 +357,14 @@ export default function NewComplaintModal({ isOpen, onClose, onSuccess }) {
                                         <span className="text-lg">📍</span>
                                         Auto-detect My Location
                                         <span className="text-xs text-emerald-400/60 ml-1">(GPS)</span>
-                                    </motion.button>
+                                    </Motion.button>
 
                                     {locError && (
-                                        <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                                        <Motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                                             className="text-xs text-amber-400 text-center px-2"
                                             style={{ fontFamily: "'DM Sans',sans-serif" }}>
                                             ⚠ {locError}
-                                        </motion.p>
+                                        </Motion.p>
                                     )}
 
                                     <div className="flex items-center gap-3">
@@ -330,28 +376,28 @@ export default function NewComplaintModal({ isOpen, onClose, onSuccess }) {
                                     {/* Manual entry */}
                                     <div>
                                         <input type="text" value={form.exactAddress}
-                                            onChange={e => setForm(f => ({ ...f, exactAddress: e.target.value }))}
+                                            onChange={e => setForm(f => ({ ...f, exactAddress: e.target.value, lat: null, lng: null }))}
                                             onFocus={() => setFocusedField('addr')} onBlur={() => setFocusedField(null)}
                                             style={inputStyle('addr')}
                                             placeholder="Exact address (House no., Street, Area...)" />
                                     </div>
                                     <div className="grid grid-cols-2 gap-3">
                                         <input type="text" value={form.city}
-                                            onChange={e => setForm(f => ({ ...f, city: e.target.value }))}
+                                            onChange={e => setForm(f => ({ ...f, city: e.target.value, lat: null, lng: null }))}
                                             onFocus={() => setFocusedField('city')} onBlur={() => setFocusedField(null)}
                                             style={inputStyle('city')} placeholder="City" />
                                         <input type="text" value={form.district}
-                                            onChange={e => setForm(f => ({ ...f, district: e.target.value }))}
+                                            onChange={e => setForm(f => ({ ...f, district: e.target.value, lat: null, lng: null }))}
                                             onFocus={() => setFocusedField('dist')} onBlur={() => setFocusedField(null)}
                                             style={inputStyle('dist')} placeholder="District" />
                                     </div>
                                     <div className="grid grid-cols-2 gap-3">
                                         <input type="text" value={form.state}
-                                            onChange={e => setForm(f => ({ ...f, state: e.target.value }))}
+                                            onChange={e => setForm(f => ({ ...f, state: e.target.value, lat: null, lng: null }))}
                                             onFocus={() => setFocusedField('state')} onBlur={() => setFocusedField(null)}
                                             style={inputStyle('state')} placeholder="State" />
                                         <input type="text" value={form.pincode}
-                                            onChange={e => setForm(f => ({ ...f, pincode: e.target.value }))}
+                                            onChange={e => setForm(f => ({ ...f, pincode: e.target.value, lat: null, lng: null }))}
                                             onFocus={() => setFocusedField('pin')} onBlur={() => setFocusedField(null)}
                                             style={inputStyle('pin')} placeholder="Pincode" />
                                     </div>
@@ -359,10 +405,10 @@ export default function NewComplaintModal({ isOpen, onClose, onSuccess }) {
 
                             ) : locState === 'detecting' ? (
                                 // Detecting animation
-                                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                                <Motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                                     className="flex flex-col items-center justify-center py-8 rounded-2xl gap-3"
                                     style={{ background: 'rgba(16,185,129,0.05)', border: '1px solid rgba(16,185,129,0.15)' }}>
-                                    <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1.2, ease: 'linear' }}
+                                    <Motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1.2, ease: 'linear' }}
                                         className="w-8 h-8 border-2 border-emerald-500/30 border-t-emerald-400 rounded-full" />
                                     <p className="text-sm text-emerald-400 font-medium" style={{ fontFamily: "'DM Sans',sans-serif" }}>
                                         Detecting your location…
@@ -370,11 +416,11 @@ export default function NewComplaintModal({ isOpen, onClose, onSuccess }) {
                                     <p className="text-xs text-white/25" style={{ fontFamily: "'DM Sans',sans-serif" }}>
                                         Please allow location access if prompted
                                     </p>
-                                </motion.div>
+                                </Motion.div>
 
                             ) : (
                                 // Detected — show result + allow editing
-                                <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                                <Motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
                                     className="rounded-2xl overflow-hidden"
                                     style={{ border: '1px solid rgba(16,185,129,0.25)', background: 'rgba(16,185,129,0.04)' }}>
 
@@ -392,11 +438,11 @@ export default function NewComplaintModal({ isOpen, onClose, onSuccess }) {
                                                 </span>
                                             )}
                                         </div>
-                                        <motion.button type="button" whileTap={{ scale: 0.9 }} onClick={clearLocation}
+                                        <Motion.button type="button" whileTap={{ scale: 0.9 }} onClick={clearLocation}
                                             className="text-xs text-white/30 hover:text-white/60 transition-colors px-2 py-1 rounded-lg"
                                             style={{ fontFamily: "'DM Sans',sans-serif", background: 'rgba(255,255,255,0.04)' }}>
                                             ✕ Clear
-                                        </motion.button>
+                                        </Motion.button>
                                     </div>
 
                                     {/* Editable fields — pre-filled from GPS */}
@@ -405,7 +451,7 @@ export default function NewComplaintModal({ isOpen, onClose, onSuccess }) {
                                             <label className="block text-[10px] text-white/25 mb-1.5 uppercase tracking-wider"
                                                 style={{ fontFamily: "'DM Sans',sans-serif" }}>Exact Address</label>
                                             <input type="text" value={form.exactAddress}
-                                                onChange={e => setForm(f => ({ ...f, exactAddress: e.target.value }))}
+                                                onChange={e => setForm(f => ({ ...f, exactAddress: e.target.value, lat: null, lng: null }))}
                                                 onFocus={() => setFocusedField('addr')} onBlur={() => setFocusedField(null)}
                                                 style={{ ...inputStyle('addr'), fontSize: 12 }}
                                                 placeholder="Edit if needed..." />
@@ -423,7 +469,7 @@ export default function NewComplaintModal({ isOpen, onClose, onSuccess }) {
                                                         <label className="block text-[10px] text-white/25 mb-1.5 uppercase tracking-wider"
                                                             style={{ fontFamily: "'DM Sans',sans-serif" }}>{label}</label>
                                                         <input type="text" value={form[key]}
-                                                            onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+                                                            onChange={e => setForm(f => ({ ...f, [key]: e.target.value, ...(f.pinSelected ? {} : { lat: null, lng: null }) }))}
                                                             onFocus={() => setFocusedField(key)} onBlur={() => setFocusedField(null)}
                                                             style={{ ...inputStyle(key), fontSize: 12 }} placeholder={label} />
                                                     </div>
@@ -432,7 +478,7 @@ export default function NewComplaintModal({ isOpen, onClose, onSuccess }) {
                                                         <label className="block text-[10px] text-white/25 mb-1.5 uppercase tracking-wider"
                                                             style={{ fontFamily: "'DM Sans',sans-serif" }}>{label}</label>
                                                         <input type="text" value={form[key]}
-                                                            onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+                                                            onChange={e => setForm(f => ({ ...f, [key]: e.target.value, ...(f.pinSelected ? {} : { lat: null, lng: null }) }))}
                                                             onFocus={() => setFocusedField(key)} onBlur={() => setFocusedField(null)}
                                                             style={{ ...inputStyle(key), fontSize: 12 }} placeholder={label} />
                                                     </div>
@@ -443,10 +489,19 @@ export default function NewComplaintModal({ isOpen, onClose, onSuccess }) {
                                             ✏️ You can edit any field above to add more detail (e.g. flat number, landmark)
                                         </p>
                                     </div>
-                                </motion.div>
+                                </Motion.div>
                             )}
                         </div>
 
+                        <div className="space-y-3">
+                            <button type="button" className="text-xs text-emerald-300 underline" onClick={() => setPinPickerOpen(!pinPickerOpen)}>{pinPickerOpen ? 'Hide location pin picker' : 'Choose a map pin (optional)'}</button>
+                            {pinPickerOpen && <>
+                                <LocationPicker lat={form.lat} lng={form.lng} onChange={point => setForm(previous => ({ ...previous, ...point, pinSelected: true }))} />
+                                <div className="grid grid-cols-2 gap-3">{['lat', 'lng'].map(key => <label key={key} className="text-xs text-white/60">{key === 'lat' ? 'Latitude' : 'Longitude'}<input aria-label={key === 'lat' ? 'Latitude' : 'Longitude'} type="number" step="any" min={key === 'lat' ? -90 : -180} max={key === 'lat' ? 90 : 180} value={form[key] ?? ''} onChange={event => setForm(previous => ({ ...previous, [key]: event.target.value === '' ? null : Number(event.target.value), pinSelected: true }))} style={inputStyle(key)} /></label>)}</div>
+                                <button type="button" className="text-xs text-white/60 underline" onClick={() => setForm(previous => ({ ...previous, lat: null, lng: null, pinSelected: false }))}>Remove pin</button>
+                            </>}
+                        </div>
+                        <DuplicateSuggestions result={duplicates} loading={checkingDuplicates} error={duplicateError} continued={Boolean(duplicateKey && continuedKey === duplicateKey)} onContinue={() => { setContinuedKey(duplicateKey); setError(''); }} />
                         {/* Image Upload */}
                         <div>
                             <label className="block text-xs font-semibold text-white/35 uppercase tracking-widest mb-2.5"
@@ -455,28 +510,29 @@ export default function NewComplaintModal({ isOpen, onClose, onSuccess }) {
                             </label>
                             <div className="grid grid-cols-2 gap-3">
                                 {images.map((img, i) => (
-                                    <motion.div key={i} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+                                    <Motion.div key={i} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
                                         className="relative rounded-2xl overflow-hidden aspect-video"
                                         style={{ border: '1px solid rgba(255,255,255,0.1)' }}>
                                         <img src={img.preview} alt="preview" className="w-full h-full object-cover" />
-                                        <motion.button type="button" whileHover={{ scale: 1.1 }} onClick={() => setImages(p => p.filter((_, j) => j !== i))}
+                                        <Motion.button type="button" whileHover={{ scale: 1.1 }} onClick={() => setImages(p => p.filter((_, j) => j !== i))}
                                             className="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white"
-                                            style={{ background: '#ef4444' }}>✕</motion.button>
+                                            style={{ background: '#ef4444' }}>✕</Motion.button>
                                         <div className="absolute bottom-0 left-0 right-0 py-1.5 text-center text-[10px] text-white/60"
                                             style={{ background: 'rgba(0,0,0,0.5)', fontFamily: "'DM Sans',sans-serif" }}>Photo {i + 1}</div>
-                                    </motion.div>
+                                    </Motion.div>
                                 ))}
                                 {images.length < 2 && (
                                     <label className="flex flex-col items-center justify-center aspect-video rounded-2xl cursor-pointer transition-all hover:border-emerald-500/50 hover:bg-emerald-500/5"
                                         style={{ border: '2px dashed rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.02)' }}>
                                         <span className="text-2xl mb-2">📸</span>
                                         <span className="text-xs text-white/35" style={{ fontFamily: "'DM Sans',sans-serif" }}>Click to upload</span>
-                                        <input type="file" accept="image/*" multiple onChange={handleImageUpload} className="hidden" />
+                                        <input type="file" accept="image/jpeg,image/png,image/webp" disabled={capabilities?.uploads === false} multiple onChange={handleImageUpload} className="hidden" />
                                     </label>
                                 )}
                             </div>
                         </div>
 
+                        <p className="text-sm text-white/60">A written address is sufficient. Map lookup is optional. {capabilities?.uploads === false && 'Image uploads are unavailable; submit without photos.'} {capabilities?.email === false && 'Email notifications are disabled; check your dashboard for updates.'}</p>
                         <label className="flex items-start gap-2 text-sm text-white/70">
                             <input type="checkbox" checked={form.isPublic}
                                 onChange={event => setForm({ ...form, isPublic: event.target.checked })}
@@ -486,27 +542,46 @@ export default function NewComplaintModal({ isOpen, onClose, onSuccess }) {
 
                         {/* Actions */}
                         <div className="flex gap-3 pt-2 pb-1">
-                            <motion.button type="button" whileTap={{ scale: 0.97 }} onClick={onClose}
+                            <Motion.button type="button" whileTap={{ scale: 0.97 }} onClick={onClose}
                                 className="flex-1 py-3.5 rounded-2xl text-sm font-semibold text-white/60 hover:text-white transition-colors"
                                 style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', fontFamily: "'DM Sans',sans-serif" }}>
                                 Cancel
-                            </motion.button>
-                            <motion.button type="submit" disabled={loading} whileTap={{ scale: 0.97 }}
+                            </Motion.button>
+                            <Motion.button type="submit" disabled={loading} whileTap={{ scale: 0.97 }}
                                 className="flex-[2] py-3.5 rounded-2xl text-sm font-bold relative overflow-hidden group disabled:opacity-60 disabled:cursor-not-allowed">
                                 <span className="absolute inset-0 bg-gradient-to-r from-emerald-500 to-blue-600" />
                                 <span className="absolute inset-0 bg-gradient-to-r from-blue-600 to-purple-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                                 <span className="relative z-10 flex items-center justify-center gap-2 text-white">
                                     {loading ? (
-                                        <><motion.span animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 0.8, ease: 'linear' }}
+                                        <><Motion.span animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 0.8, ease: 'linear' }}
                                             className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full inline-block" />
                                             Submitting…</>
                                     ) : <>Submit Complaint →</>}
                                 </span>
-                            </motion.button>
+                            </Motion.button>
                         </div>
                     </form>
-                </motion.div>
+                </Motion.div>
             </div>
         </AnimatePresence>
     );
+}
+
+async function geocodeAddress(address) {
+    const params = new URLSearchParams({
+        q: address,
+        format: 'jsonv2',
+        limit: '1',
+        countrycodes: 'in',
+    });
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, {
+        headers: { 'Accept-Language': 'en' },
+        signal: AbortSignal.timeout(4000),
+    });
+    if (!res.ok) throw new Error('Address lookup failed');
+
+    const [match] = await res.json();
+    const lat = Number(match?.lat);
+    const lng = Number(match?.lon);
+    return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
 }

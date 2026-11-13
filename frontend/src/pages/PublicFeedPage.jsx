@@ -1,8 +1,22 @@
 import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Link } from 'react-router-dom';
+import { motion as Motion, AnimatePresence } from 'framer-motion';
+import { Link, useSearchParams } from 'react-router-dom';
+import FollowComplaint from '../components/FollowComplaint';
 import DashboardLayout from '../layouts/DashboardLayout';
 import api from '../services/api';
+import { useAuth } from '../context/auth';
+
+function FeedLayout({ children, search, onSearchChange }) {
+    const { user } = useAuth();
+    if (user) return <DashboardLayout search={search} onSearchChange={onSearchChange}>{children}</DashboardLayout>;
+    return <div className="min-h-screen bg-[#03070f] text-white">
+        <header className="flex items-center justify-between gap-4 p-5 border-b border-white/10">
+            <Link to="/" className="font-bold">CivicConnect</Link>
+            <Link to="/login" className="rounded-xl bg-emerald-500/20 px-4 py-2 text-emerald-300">Sign in</Link>
+        </header>
+        <main className="p-4 sm:p-8">{children}</main>
+    </div>;
+}
 
 const STATUS_CFG = {
     'Pending': { color: '#f59e0b', bg: 'rgba(245,158,11,0.1)', label: '⏳ Pending' },
@@ -28,13 +42,13 @@ function timeAgo(d) {
 }
 
 // ── Single complaint card for public feed ─────────────────────────────────────
-function FeedCard({ c, index }) {
-    const [expanded, setExpanded] = useState(false);
+function FeedCard({ c, index, initiallyExpanded = false }) {
+    const [expanded, setExpanded] = useState(initiallyExpanded);
     const cfg = STATUS_CFG[c.status] || STATUS_CFG['Pending'];
     const cCfg = CAT_CFG[c.category] || { icon: '📋', color: '#ffffff' };
 
     return (
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.04 }}
+        <Motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.04 }}
             className="rounded-3xl overflow-hidden cursor-pointer group"
             style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
             onClick={() => setExpanded(e => !e)}>
@@ -44,16 +58,16 @@ function FeedCard({ c, index }) {
                 <div className="w-1 rounded-l-3xl flex-shrink-0 transition-all duration-300"
                     style={{ background: expanded ? `linear-gradient(180deg,${cCfg.color},${cfg.color})` : 'transparent' }} />
 
-                <div className="flex-1 p-5">
+                <div className="flex-1 min-w-0 p-5">
                     {/* Top row */}
-                    <div className="flex items-start justify-between gap-3 mb-3">
+                    <div className="flex flex-col sm:flex-row items-start justify-between gap-3 mb-3">
                         <div className="flex items-center gap-3 min-w-0">
                             <div className="w-9 h-9 rounded-xl flex items-center justify-center text-base flex-shrink-0"
                                 style={{ background: `${cCfg.color}18`, border: `1px solid ${cCfg.color}25` }}>
                                 {cCfg.icon}
                             </div>
                             <div className="min-w-0">
-                                <h3 className="text-sm font-bold text-white leading-tight truncate">{c.title}</h3>
+                                <h3 className="text-sm font-bold text-white leading-tight break-words"><button type="button" aria-expanded={expanded} onClick={event => { event.stopPropagation(); setExpanded(value => !value); }} className="text-left">{c.title}</button></h3>
                                 <p className="text-[11px] text-white/30 mt-0.5" style={{ fontFamily: "'DM Sans',sans-serif" }}>
                                     {c.complaintId && <span className="font-mono mr-2">{c.complaintId}</span>}
                                     📍 {c.city || c.location?.split(',')[0] || 'Unknown'}
@@ -100,10 +114,11 @@ function FeedCard({ c, index }) {
                     {/* Expanded content */}
                     <AnimatePresence>
                         {expanded && (
-                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
+                            <Motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
                                 exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.25 }}>
                                 <div className="mt-4 pt-4 space-y-4" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
 
+                                    <FollowComplaint complaint={c} />
                                     {/* Images */}
                                     {c.images?.length > 0 && (
                                         <div>
@@ -190,30 +205,63 @@ function FeedCard({ c, index }) {
                                         </div>
                                     )}
                                 </div>
-                            </motion.div>
+                            </Motion.div>
                         )}
                     </AnimatePresence>
                 </div>
             </div>
-        </motion.div>
+        </Motion.div>
     );
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function PublicFeedPage() {
+    const { user, updateUser } = useAuth();
+    const [params] = useSearchParams();
     const [complaints, setComplaints] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [search, setSearch] = useState('');
+    const [search, setSearch] = useState(params.get('tracking') || '');
+    const [followedOnly, setFollowedOnly] = useState(false);
     const [statusF, setStatusF] = useState('all');
     const [catF, setCatF] = useState('all');
     const [sortBy, setSortBy] = useState('newest');
+    const [error, setError] = useState('');
+    const [refreshKey, setRefreshKey] = useState(0);
+    const [areas, setAreas] = useState([]);
+    const [selectedArea, setSelectedArea] = useState('');
+    const [customCity, setCustomCity] = useState(user?.selectedArea?.city || '');
+    const [customState, setCustomState] = useState(user?.selectedArea?.state || '');
+    const activeArea = !user ? '*' : selectedArea || (user.selectedArea?.city ? JSON.stringify(user.selectedArea) : '');
+    const areaOptions = user?.selectedArea?.city && !areas.some(area => area.city.toLowerCase() === user.selectedArea.city.toLowerCase() && area.state.toLowerCase() === user.selectedArea.state.toLowerCase())
+        ? [user.selectedArea, ...areas] : areas;
 
+    useEffect(() => { api.get('/complaints/areas').then(response => setAreas(response.data)).catch(() => setAreas([])); }, []);
     useEffect(() => {
-        api.get('/complaints')
-            .then(r => setComplaints(r.data))
-            .catch(console.error)
-            .finally(() => setLoading(false));
-    }, []);
+        if (followedOnly) {
+            api.get('/complaints/followed').then(r => setComplaints(r.data)).catch(error => setError(error.response?.data?.message || 'Sign in to view followed reports.')).finally(() => setLoading(false));
+            return;
+        }
+        if (!activeArea && user) return;
+        const params = activeArea && activeArea !== '*' ? JSON.parse(activeArea) : {};
+        api.get('/complaints', { params }).then(r => setComplaints(r.data)).catch(error => setError(error.response?.data?.message || 'Could not load the public feed. Please retry.')).finally(() => setLoading(false));
+    }, [refreshKey, followedOnly, activeArea, user]);
+
+    const changeArea = async value => {
+        setLoading(true);
+        setError('');
+        setSelectedArea(value);
+        if (value === 'custom') { setLoading(false); return; }
+        if (!user) return;
+        const area = value === '*' ? null : JSON.parse(value);
+        try {
+            const { data } = await api.put('/auth/preferences', { selectedArea: area });
+            updateUser(data.user);
+        } catch (error) { setError(error.response?.data?.message || 'Could not save your selected area.'); }
+    };
+    const applyCustomArea = () => {
+        if (!customCity.trim() || !customState.trim()) { setError('Enter both city and state.'); return; }
+        changeArea(JSON.stringify({ city: customCity.trim(), state: customState.trim() }));
+    };
 
     const filtered = complaints
         .filter(c => c.isPublic !== false)
@@ -241,13 +289,13 @@ export default function PublicFeedPage() {
     const critical = complaints.filter(c => c.priority === 'Critical').length;
 
     return (
-        <DashboardLayout>
+        <FeedLayout search={search} onSearchChange={setSearch}>
             <style>{`@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap');`}</style>
 
             <div className="max-w-4xl mx-auto space-y-6" style={{ fontFamily: "'Syne','DM Sans',sans-serif" }}>
 
                 {/* Header */}
-                <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }}>
+                <Motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }}>
                     <h1 className="text-3xl font-extrabold text-white tracking-tight mb-1">
                         Public{' '}
                         <span style={{
@@ -258,9 +306,9 @@ export default function PublicFeedPage() {
                         </span>
                     </h1>
                     <p className="text-sm text-white/35" style={{ fontFamily: "'DM Sans',sans-serif" }}>
-                        All civic complaints filed by citizens — transparent & open
+                        Only complaints that citizens have chosen to share publicly.
                     </p>
-                </motion.div>
+                </Motion.div>
 
                 {/* Summary stats */}
                 <div className="grid grid-cols-3 gap-3">
@@ -269,17 +317,32 @@ export default function PublicFeedPage() {
                         { v: resolved, l: 'Resolved', c: '#10b981' },
                         { v: critical, l: 'Critical Issues', c: '#ef4444' },
                     ].map(({ v, l, c }, i) => (
-                        <motion.div key={l} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                        <Motion.div key={l} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: 0.05 + i * 0.06 }}
                             className="p-4 rounded-2xl text-center"
                             style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
                             <p className="text-3xl font-extrabold" style={{ color: c }}>{v}</p>
                             <p className="text-[11px] text-white/35 mt-1" style={{ fontFamily: "'DM Sans',sans-serif" }}>{l}</p>
-                        </motion.div>
+                        </Motion.div>
                     ))}
                 </div>
 
                 {/* Filters */}
+                <label className="flex items-center gap-2 text-xs text-white/60"><input type="checkbox" checked={followedOnly} onChange={event => { setLoading(true); setError(''); setFollowedOnly(event.target.checked); }} />Reports I follow (sign-in required)</label>
+                {!followedOnly && <label className="flex flex-col gap-2 text-xs text-white/60 sm:max-w-xs">Area
+                    <select value={activeArea} onChange={event => changeArea(event.target.value)} aria-label="Filter public complaints by area" className="px-4 py-3 rounded-2xl text-sm text-white outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.09)' }}>
+                        {user && <option value="">Choose an area</option>}
+                        <option value="*">All areas</option>
+                        <option value="custom">Choose a city and state…</option>
+                        {areaOptions.map(area => <option key={`${area.city}-${area.state}`} value={JSON.stringify(area)}>{area.city}, {area.state}</option>)}
+                    </select>
+                </label>}
+                {user && activeArea === 'custom' && <div className="flex flex-col gap-2 sm:flex-row sm:max-w-xl">
+                    <input aria-label="Area city" value={customCity} onChange={event => setCustomCity(event.target.value)} maxLength={100} placeholder="City" className="min-w-0 flex-1 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white placeholder:text-white/35 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400" />
+                    <input aria-label="Area state" value={customState} onChange={event => setCustomState(event.target.value)} maxLength={100} placeholder="State" className="min-w-0 flex-1 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white placeholder:text-white/35 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400" />
+                    <button type="button" onClick={applyCustomArea} className="rounded-xl bg-emerald-500/15 px-4 py-3 text-sm font-semibold text-emerald-200">Apply area</button>
+                </div>}
+                {user && !selectedArea && !followedOnly && <p className="text-xs text-amber-300/80">Choose an area to see nearby public complaints, or select All areas.</p>}
                 <div className="flex flex-col sm:flex-row gap-3">
                     <div className="relative flex-1">
                         <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/25" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -323,7 +386,9 @@ export default function PublicFeedPage() {
                 </p>
 
                 {/* Feed */}
-                {loading ? (
+                {error ? <div role="alert" className="p-6 rounded-2xl border border-red-400/30 text-red-300">{error} <button className="underline ml-2" onClick={() => { setError(''); setLoading(true); setRefreshKey(value => value + 1); }}>Retry</button></div> : user && !activeArea && !followedOnly ? (
+                    <div className="text-center py-12 rounded-3xl border border-white/5 text-sm text-white/50">Choose a city and state above, or select All areas, to view public complaints.</div>
+                ) : loading ? (
                     <div className="space-y-3">
                         {[0, 1, 2, 3].map(i => (
                             <div key={i} className="h-24 rounded-3xl animate-pulse"
@@ -340,10 +405,10 @@ export default function PublicFeedPage() {
                     </div>
                 ) : (
                     <div className="space-y-3">
-                        {filtered.map((c, i) => <FeedCard key={c._id} c={c} index={i} />)}
+                        {filtered.map((c, i) => <FeedCard key={c._id} c={c} index={i} initiallyExpanded={c.complaintId === params.get('tracking')} />)}
                     </div>
                 )}
             </div>
-        </DashboardLayout>
+        </FeedLayout>
     );
 }

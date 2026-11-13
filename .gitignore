@@ -1,0 +1,7 @@
+**/.npm-cache/
+**/*-baseline.json
+.local/
+**/audit-final.json
+**/lint-results.json
+**/test-results/
+**/playwright-report/

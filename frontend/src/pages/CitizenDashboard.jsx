@@ -1,11 +1,13 @@
+import TrackingId from '../components/TrackingId';
+import { useSearchParams } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/auth';
 import DashboardLayout from '../layouts/DashboardLayout';
 import NewComplaintModal from '../components/NewComplaintModal';
 import ComplaintCard from '../components/ComplaintCard';
 import EscalationTimeline from '../components/EscalationTimeline';
 import InteractiveMap from '../components/InteractiveMap';
-import { motion, AnimatePresence, useMotionValue, useSpring } from 'framer-motion';
+import { motion as Motion, AnimatePresence, useMotionValue, useSpring } from 'framer-motion';
 import api from '../services/api';
 import AadhaarVerifyModal from '../components/AadhaarVerifyModal';
 
@@ -31,19 +33,19 @@ function MagneticButton({ children, className, onClick }) {
     const sx = useSpring(x, { stiffness: 300, damping: 20 });
     const sy = useSpring(y, { stiffness: 300, damping: 20 });
     return (
-        <motion.div ref={ref}
+        <Motion.div ref={ref}
             onMouseMove={(e) => { const r = ref.current.getBoundingClientRect(); x.set((e.clientX - r.left - r.width / 2) * 0.2); y.set((e.clientY - r.top - r.height / 2) * 0.2); }}
             onMouseLeave={() => { x.set(0); y.set(0); }}
             style={{ x: sx, y: sy }} className={className} onClick={onClick}>
             {children}
-        </motion.div>
+        </Motion.div>
     );
 }
 
 // ─── Stat Card ────────────────────────────────────────────────────────────────
 function StatCard({ icon, label, value, trend, color, delay = 0 }) {
     return (
-        <motion.div
+        <Motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
@@ -75,7 +77,7 @@ function StatCard({ icon, label, value, trend, color, delay = 0 }) {
                 <p className="text-4xl font-extrabold text-white tracking-tight mb-1">{value}</p>
                 <p className="text-sm text-white/40" style={{ fontFamily: "'DM Sans', sans-serif" }}>{label}</p>
             </div>
-        </motion.div>
+        </Motion.div>
     );
 }
 
@@ -116,14 +118,14 @@ function SkeletonCard() {
 // ─── Empty State ──────────────────────────────────────────────────────────────
 function EmptyState({ onNew }) {
     return (
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
+        <Motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
             className="text-center py-20 px-6">
-            <motion.div
+            <Motion.div
                 animate={{ y: [0, -8, 0] }} transition={{ repeat: Infinity, duration: 3, ease: 'easeInOut' }}
                 className="w-20 h-20 mx-auto mb-6 rounded-3xl flex items-center justify-center"
                 style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
                 <Icon.file className="w-9 h-9" style={{ color: 'rgba(255,255,255,0.2)' }} />
-            </motion.div>
+            </Motion.div>
             <h3 className="text-xl font-bold text-white mb-2">No complaints yet</h3>
             <p className="text-white/35 mb-8 max-w-xs mx-auto text-sm" style={{ fontFamily: "'DM Sans', sans-serif" }}>
                 Your voice matters. File your first complaint and hold leaders accountable.
@@ -137,7 +139,7 @@ function EmptyState({ onNew }) {
                     </span>
                 </button>
             </MagneticButton>
-        </motion.div>
+        </Motion.div>
     );
 }
 
@@ -151,15 +153,19 @@ function getGreeting() {
 
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 export default function CitizenDashboard() {
+    const [params] = useSearchParams();
     const { user } = useAuth();
     const [complaints, setComplaints] = useState([]);
+    const [mapComplaints, setMapComplaints] = useState([]);
     const [stats, setStats] = useState({ total: 0, resolved: 0, pending: 0, inProgress: 0, escalated: 0 });
     const [latestComplaints, setLatestComplaints] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [filed, setFiled] = useState(null);
     const [refreshing, setRefreshing] = useState(false);
     const [showModal, setShowModal] = useState(false);
     const [filter, setFilter] = useState('all');
-    const [search, setSearch] = useState('');
+    const [search, setSearch] = useState(params.get('tracking') || '');
     const [notifOpen, setNotifOpen] = useState(false);
     const [showAadhaar, setShowAadhaar] = useState(false);
     const [currentLocation, setCurrentLocation] = useState('Detecting location...');
@@ -185,12 +191,15 @@ export default function CitizenDashboard() {
 
     const fetchDashboardData = async (isRefresh = false) => {
         try {
+            setError('');
             isRefresh ? setRefreshing(true) : setLoading(true);
-            const [complaintsRes, dashboardRes] = await Promise.all([
+            const [complaintsRes, dashboardRes, mapRes] = await Promise.all([
                 api.get('/complaints/my'),
                 api.get('/dashboard/citizen'),
+                api.get('/complaints/visible'),
             ]);
             setComplaints(complaintsRes.data);
+            setMapComplaints(mapRes.data);
             const d = dashboardRes.data;
             setStats({
                 total: d.total ?? 0,
@@ -201,7 +210,7 @@ export default function CitizenDashboard() {
             });
             setLatestComplaints(d.latestComplaints ?? []);
         } catch (err) {
-            console.error('Failed to fetch dashboard data', err);
+            setError(err.response?.data?.message || 'Could not load complaints. Please retry.');
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -210,7 +219,7 @@ export default function CitizenDashboard() {
 
     const FILTERS = [
         { key: 'all', label: 'All', count: complaints.length },
-        { key: 'pending', label: 'Pending', count: complaints.filter(c => c.status !== 'Resolved').length },
+        { key: 'pending', label: 'Open', count: complaints.filter(c => ['Pending', 'In Progress'].includes(c.status)).length },
         { key: 'resolved', label: 'Resolved', count: complaints.filter(c => c.status === 'Resolved').length },
         { key: 'escalated', label: 'Escalated', count: complaints.filter(c => c.escalationLevel > 1).length },
     ];
@@ -218,7 +227,7 @@ export default function CitizenDashboard() {
     const filtered = complaints
         .filter(c => {
             if (filter === 'all') return true;
-            if (filter === 'pending') return c.status !== 'Resolved';
+            if (filter === 'pending') return ['Pending', 'In Progress'].includes(c.status);
             if (filter === 'resolved') return c.status === 'Resolved';
             if (filter === 'escalated') return c.escalationLevel > 1;
             return true;
@@ -262,16 +271,18 @@ export default function CitizenDashboard() {
         `}</style>
 
                 <div className="space-y-8">
+                    {error && <div role="alert" className="p-4 text-red-300">{error} <button onClick={() => fetchDashboardData(true)} className="underline">Retry</button></div>}
+                    {filed && <div role="status" className="p-4 rounded-xl bg-emerald-500/10 text-emerald-200">Complaint submitted. Tracking ID: <TrackingId value={filed.complaintId} />. Search this ID above. {!filed.lat && filed.lat !== 0 && 'Saved with your written address; no map pin is available.'}</div>}
 
                     {/* ── Header ── */}
-                    <motion.div initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }}
+                    <Motion.div initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
                         className="flex flex-col md:flex-row md:items-center justify-between gap-5">
 
                         <div>
                             {/* Greeting badge */}
                             <div className="inline-flex items-center gap-2 glass-panel px-3 py-1.5 rounded-full mb-4 text-xs text-emerald-400 font-medium">
-                                <motion.span animate={{ opacity: [1, 0.3, 1] }} transition={{ repeat: Infinity, duration: 1.8 }}
+                                <Motion.span animate={{ opacity: [1, 0.3, 1] }} transition={{ repeat: Infinity, duration: 1.8 }}
                                     className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
                                 {getGreeting()}, {firstName}
                             </div>
@@ -308,20 +319,20 @@ export default function CitizenDashboard() {
                         {/* Actions */}
                         <div className="flex items-center gap-3">
                             {/* Refresh */}
-                            <motion.button
+                            <Motion.button
                                 onClick={() => fetchDashboardData(true)}
                                 whileTap={{ scale: 0.92 }}
                                 className="w-10 h-10 glass-panel rounded-2xl flex items-center justify-center text-white/50 hover:text-white transition-colors"
                                 title="Refresh"
                             >
-                                <motion.div animate={refreshing ? { rotate: 360 } : {}} transition={{ repeat: refreshing ? Infinity : 0, duration: 0.7, ease: 'linear' }}>
+                                <Motion.div animate={refreshing ? { rotate: 360 } : {}} transition={{ repeat: refreshing ? Infinity : 0, duration: 0.7, ease: 'linear' }}>
                                     <Icon.refresh className="w-4 h-4" />
-                                </motion.div>
-                            </motion.button>
+                                </Motion.div>
+                            </Motion.button>
 
                             {/* Notifications */}
                             <div className="relative">
-                                <motion.button whileTap={{ scale: 0.92 }} onClick={() => setNotifOpen(!notifOpen)}
+                                <Motion.button whileTap={{ scale: 0.92 }} onClick={() => setNotifOpen(!notifOpen)}
                                     className="w-10 h-10 glass-panel rounded-2xl flex items-center justify-center text-white/50 hover:text-white transition-colors relative">
                                     <Icon.bell className="w-4 h-4" />
                                     {stats.escalated > 0 && (
@@ -329,10 +340,10 @@ export default function CitizenDashboard() {
                                             {stats.escalated}
                                         </span>
                                     )}
-                                </motion.button>
+                                </Motion.button>
                                 <AnimatePresence>
                                     {notifOpen && (
-                                        <motion.div initial={{ opacity: 0, y: 8, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+                                        <Motion.div initial={{ opacity: 0, y: 8, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }}
                                             exit={{ opacity: 0, y: 8, scale: 0.95 }} transition={{ duration: 0.18 }}
                                             className="absolute right-0 top-12 w-72 glass-panel rounded-2xl p-4 z-50 shadow-2xl">
                                             <p className="text-xs font-semibold text-white/40 uppercase tracking-widest mb-3">Notifications</p>
@@ -349,7 +360,7 @@ export default function CitizenDashboard() {
                                             ) : (
                                                 <p className="text-xs text-white/30 text-center py-4" style={{ fontFamily: "'DM Sans', sans-serif" }}>All clear! No new notifications.</p>
                                             )}
-                                        </motion.div>
+                                        </Motion.div>
                                     )}
                                 </AnimatePresence>
                             </div>
@@ -367,7 +378,7 @@ export default function CitizenDashboard() {
                                 </button>
                             </MagneticButton>
                         </div>
-                    </motion.div>
+                    </Motion.div>
 
                     {/* ── Stats Grid ── */}
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-5">
@@ -383,7 +394,7 @@ export default function CitizenDashboard() {
 
                     {/* ── Progress Bar ── */}
                     {stats.total > 0 && (
-                        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
+                        <Motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
                             className="glass-panel rounded-2xl p-5">
                             <div className="flex items-center justify-between mb-3">
                                 <p className="text-sm font-semibold text-white/70">Resolution Progress</p>
@@ -392,7 +403,7 @@ export default function CitizenDashboard() {
                                 </p>
                             </div>
                             <div className="h-2 rounded-full bg-white/8 overflow-hidden">
-                                <motion.div
+                                <Motion.div
                                     initial={{ width: 0 }}
                                     animate={{ width: `${stats.total > 0 ? (stats.resolved / stats.total) * 100 : 0}%` }}
                                     transition={{ duration: 1.2, delay: 0.4, ease: 'easeOut' }}
@@ -412,7 +423,7 @@ export default function CitizenDashboard() {
                                     </div>
                                 ))}
                             </div>
-                        </motion.div>
+                        </Motion.div>
                     )}
 
                     {/* ── Interactive Map ── */}
@@ -426,14 +437,14 @@ export default function CitizenDashboard() {
                             </div>
                         </div>
                         <div className="min-h-[520px] lg:h-[500px] w-full rounded-2xl overflow-hidden relative border border-white/10">
-                            <InteractiveMap complaints={complaints} isCitizen={true} />
+                            <InteractiveMap complaints={mapComplaints} isCitizen={true} externalSearch={search} />
                         </div>
                     </div>
 
                     {/* ── Escalation Timeline ── */}
                     <AnimatePresence>
                         {latestComplaints.length > 0 && (
-                            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}
+                            <Motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}
                                 className="glass-panel rounded-3xl p-7">
                                 <div className="flex items-center justify-between mb-6">
                                     <div>
@@ -455,12 +466,12 @@ export default function CitizenDashboard() {
                                     escalationLevel={latestComplaints[0]?.escalationLevel || 1}
                                     status={latestComplaints[0]?.status || 'Pending'}
                                 />
-                            </motion.div>
+                            </Motion.div>
                         )}
                     </AnimatePresence>
 
                     {/* ── Complaints Feed ── */}
-                    <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
+                    <Motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
                         className="glass-panel rounded-3xl p-7">
 
                         {/* Feed Header */}
@@ -484,43 +495,43 @@ export default function CitizenDashboard() {
                         {/* Complaint List */}
                         <AnimatePresence mode="wait">
                             {filtered.length === 0 ? (
-                                <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                                <Motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                                     <EmptyState onNew={() => setShowModal(true)} />
-                                </motion.div>
+                                </Motion.div>
                             ) : (
-                                <motion.div key={filter} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                                <Motion.div key={filter} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                                     className="space-y-4">
                                     {filtered.map((complaint, i) => (
-                                        <motion.div key={complaint._id}
+                                        <Motion.div key={complaint._id}
                                             initial={{ opacity: 0, y: 16 }}
                                             animate={{ opacity: 1, y: 0 }}
                                             transition={{ delay: i * 0.06, duration: 0.4 }}>
                                             <ComplaintCard complaint={complaint} onUpdate={fetchDashboardData} />
-                                        </motion.div>
+                                        </Motion.div>
                                     ))}
-                                </motion.div>
+                                </Motion.div>
                             )}
                         </AnimatePresence>
-                    </motion.div>
+                    </Motion.div>
 
                     {/* ── Quick Tips (first time) ── */}
                     {stats.total === 0 && (
-                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }}
+                        <Motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }}
                             className="grid sm:grid-cols-3 gap-4">
                             {[
                                 { icon: '📍', title: 'Geo-tag your issue', desc: 'Pin your exact location for faster routing to the right department.' },
                                 { icon: '📸', title: 'Attach evidence', desc: 'Photos and documents increase resolution speed by 3x.' },
                                 { icon: '🔔', title: 'Track in real time', desc: 'Get notified at every step — from filing to final resolution.' },
                             ].map((tip, i) => (
-                                <motion.div key={tip.title} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
+                                <Motion.div key={tip.title} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
                                     transition={{ delay: 0.65 + i * 0.08 }}
                                     className="glass-panel rounded-2xl p-5 card-hover cursor-default">
                                     <div className="text-2xl mb-3">{tip.icon}</div>
                                     <p className="text-sm font-bold text-white mb-1">{tip.title}</p>
                                     <p className="text-xs text-white/40 leading-relaxed" style={{ fontFamily: "'DM Sans', sans-serif" }}>{tip.desc}</p>
-                                </motion.div>
+                                </Motion.div>
                             ))}
-                        </motion.div>
+                        </Motion.div>
                     )}
 
                 </div>
@@ -529,13 +540,13 @@ export default function CitizenDashboard() {
                 <NewComplaintModal
                     isOpen={showModal}
                     onClose={() => setShowModal(false)}
-                    onSuccess={() => { fetchDashboardData(); setShowModal(false); }}
+                    onSuccess={data => { setFiled(data); fetchDashboardData(); setShowModal(false); }}
                 />
 
                 <AadhaarVerifyModal
                     isOpen={showAadhaar}
                     onClose={() => setShowAadhaar(false)}
-                    onVerified={() => { updateAadhaarVerification(); setShowAadhaar(false); }}
+                    onVerified={() => { setShowAadhaar(false); }}
                 />
             </div>
         </DashboardLayout>

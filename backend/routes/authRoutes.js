@@ -4,6 +4,23 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const auth = require("../middleware/authMiddleware");
+const multer = require("multer");
+const cloudinary = require("cloudinary").v2;
+const avatarUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 }, fileFilter(_req, file, cb) {
+  cb(["image/jpeg", "image/png", "image/webp"].includes(file.mimetype) ? null : Object.assign(new Error("Use JPEG, PNG or WebP images."), { status: 400 }), true);
+} });
+const { rateLimit } = require('express-rate-limit');
+const createAuthLimiter = (limit, windowMs = 15 * 60 * 1000) => rateLimit({
+  windowMs,
+  limit,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { message: 'Too many attempts. Please wait before trying again.' },
+});
+const registrationLimiter = createAuthLimiter(8, 60 * 60 * 1000);
+const loginLimiter = createAuthLimiter(10);
+const verificationLimiter = createAuthLimiter(5, 60 * 60 * 1000);
+const passwordChangeLimiter = createAuthLimiter(5);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const getWhitelist = () => {
@@ -26,7 +43,7 @@ const getAdminWhitelist = () =>
 //   1. Email must be in ADMIN_WHITELIST
 //   2. Must provide correct ADMIN_SECRET_CODE
 //   3. Account is created with isApproved=false — admin must approve manually
-router.post("/register", async (req, res) => {
+router.post("/register", registrationLimiter, async (req, res) => {
   try {
     const { name, email: rawEmail, password, role, adminSecretCode } = req.body;
     const email = typeof rawEmail === "string" ? rawEmail.trim().toLowerCase() : "";
@@ -91,6 +108,12 @@ router.post("/register", async (req, res) => {
         role: user.role,
         aadhaarVerified: user.aadhaarVerified,
         isApproved: user.isApproved,
+        emailNotifications: user.emailNotifications,
+        mapTheme: user.mapTheme,
+        followedComplaints: user.followedComplaints,
+        selectedArea: user.selectedArea,
+        avatarUrl: user.avatarUrl,
+        createdAt: user.createdAt,
       },
     });
   } catch (err) {
@@ -102,7 +125,7 @@ router.post("/register", async (req, res) => {
 
 // ── POST /login ───────────────────────────────────────────────────────────────
 // For admins: requires adminSecretCode as second factor
-router.post("/login", async (req, res) => {
+router.post("/login", loginLimiter, async (req, res) => {
   try {
     const { email, password, role: claimedRole, adminSecretCode } = req.body;
 
@@ -149,6 +172,12 @@ router.post("/login", async (req, res) => {
         role: user.role,
         aadhaarVerified: user.aadhaarVerified,
         isApproved: user.isApproved,
+        emailNotifications: user.emailNotifications,
+        mapTheme: user.mapTheme,
+        followedComplaints: user.followedComplaints,
+        selectedArea: user.selectedArea,
+        avatarUrl: user.avatarUrl,
+        createdAt: user.createdAt,
       },
     });
   } catch (err) {
@@ -169,10 +198,60 @@ router.get("/me", auth, async (req, res) => {
 });
 
 // ── PUT /profile ──────────────────────────────────────────────────────────────
+router.put("/preferences", auth, async (req, res, next) => {
+  try {
+    const updates = {};
+    if (req.body.emailNotifications !== undefined && typeof req.body.emailNotifications !== "boolean")
+      return res.status(400).json({ message: "emailNotifications must be true or false" });
+    if (req.body.mapTheme !== undefined && !['light', 'dark'].includes(req.body.mapTheme))
+      return res.status(400).json({ message: "mapTheme must be light or dark" });
+    if (req.body.emailNotifications !== undefined) updates.emailNotifications = req.body.emailNotifications;
+    if (req.body.mapTheme !== undefined) updates.mapTheme = req.body.mapTheme;
+    if (req.body.selectedArea !== undefined) {
+      const area = req.body.selectedArea;
+      if (area !== null && (!area || typeof area.city !== "string" || !area.city.trim() || typeof area.state !== "string" || !area.state.trim() || area.city.length > 100 || area.state.length > 100))
+        return res.status(400).json({ message: "selectedArea must contain a city and state or be null" });
+      updates.selectedArea = area === null ? { city: "", state: "" } : { city: area.city.trim(), state: area.state.trim() };
+    }
+    if (!Object.keys(updates).length) return res.status(400).json({ message: "Supply a supported preference" });
+    const user = await User.findByIdAndUpdate(req.user.id,
+      updates, { new: true, runValidators: true }).select("-password");
+    res.json({ message: "Preferences saved", user });
+  } catch (error) { next(error); }
+});
+
+router.put("/avatar", auth, avatarUpload.single("avatar"), async (req, res, next) => {
+  try {
+    if (!req.file) return res.status(400).json({ message: "Choose an image to upload." });
+    if (!["CLOUDINARY_CLOUD_NAME", "CLOUDINARY_API_KEY", "CLOUDINARY_API_SECRET"].every(name => process.env[name]?.trim()))
+      return res.status(503).json({ message: "Profile photo uploads are unavailable until image storage is configured." });
+    const uploaded = await new Promise((resolve, reject) => cloudinary.uploader.upload_stream({ folder: "civicconnect/avatars", resource_type: "image", allowed_formats: ["jpg", "jpeg", "png", "webp"], transformation: [{ width: 512, height: 512, crop: "fill", quality: "auto" }] }, (error, result) => error ? reject(error) : resolve(result)).end(req.file.buffer));
+    const user = await User.findById(req.user.id);
+    const oldId = user.avatarPublicId;
+    user.avatarUrl = uploaded.secure_url;
+    user.avatarPublicId = uploaded.public_id;
+    await user.save();
+    if (oldId) cloudinary.uploader.destroy(oldId).catch(() => {});
+    res.json({ message: "Profile photo saved", user: await User.findById(user.id).select("-password") });
+  } catch (error) { next(error); }
+});
+
+router.delete("/avatar", auth, async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user.id);
+    const oldId = user.avatarPublicId;
+    user.avatarUrl = ""; user.avatarPublicId = "";
+    await user.save();
+    if (oldId) cloudinary.uploader.destroy(oldId).catch(() => {});
+    res.json({ message: "Profile photo removed", user: await User.findById(user.id).select("-password") });
+  } catch (error) { next(error); }
+});
+
 router.put("/profile", auth, async (req, res) => {
   try {
     const { name } = req.body;
-    if (!name?.trim()) return res.status(400).json({ message: "Name is required" });
+    if (typeof name !== "string" || !name.trim() || name.trim().length > 100)
+      return res.status(400).json({ message: "Name must contain 1 to 100 characters" });
     const user = await User.findByIdAndUpdate(
       req.user.id, { name: name.trim() }, { new: true }
     ).select("-password");
@@ -183,7 +262,7 @@ router.put("/profile", auth, async (req, res) => {
 });
 
 // ── PUT /change-password ──────────────────────────────────────────────────────
-router.put("/change-password", auth, async (req, res) => {
+router.put("/change-password", auth, passwordChangeLimiter, async (req, res) => {
   try {
     const { oldPassword, newPassword } = req.body;
     if (!oldPassword || !newPassword)
@@ -203,7 +282,9 @@ router.put("/change-password", auth, async (req, res) => {
 });
 
 // ── POST /verify-aadhaar ──────────────────────────────────────────────────────
-router.post("/verify-aadhaar", auth, async (req, res) => {
+router.post("/verify-aadhaar", auth, verificationLimiter, async (req, res) => {
+  if (req.user.role !== "citizen")
+    return res.status(403).json({ message: "Only citizen accounts can use demo verification." });
   try {
     const { aadhaarNumber } = req.body;
     if (typeof aadhaarNumber !== "string" || !/^\d{12}$/.test(aadhaarNumber.replace(/\s/g, "")))

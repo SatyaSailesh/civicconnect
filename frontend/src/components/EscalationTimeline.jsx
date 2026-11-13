@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion';
+import { motion as Motion } from 'framer-motion';
 
 const STEPS = [
     { level: 1, name: 'Citizen', authority: 'Local Office', icon: '🧑‍💼', color: '#10b981' },
@@ -18,7 +18,7 @@ export default function EscalationTimeline({ escalationLevel = 1, status }) {
                 {/* Connector track */}
                 <div className="absolute top-5 left-[12.5%] right-[12.5%] h-0.5"
                     style={{ background: 'rgba(255,255,255,0.06)' }}>
-                    <motion.div className="h-full rounded-full"
+                    <Motion.div className="h-full rounded-full"
                         initial={{ width: 0 }}
                         animate={{ width: `${((current - 1) / 3) * 100}%` }}
                         transition={{ duration: 1, ease: 'easeOut', delay: 0.3 }}
@@ -33,7 +33,7 @@ export default function EscalationTimeline({ escalationLevel = 1, status }) {
                     return (
                         <div key={step.level} className="flex-1 flex flex-col items-center relative z-10">
                             {/* Circle */}
-                            <motion.div
+                            <Motion.div
                                 initial={{ scale: 0.8, opacity: 0 }}
                                 animate={{ scale: 1, opacity: 1 }}
                                 transition={{ delay: i * 0.15, duration: 0.4 }}
@@ -41,7 +41,7 @@ export default function EscalationTimeline({ escalationLevel = 1, status }) {
 
                                 {/* Pulse ring for active */}
                                 {active && !resolved && (
-                                    <motion.div
+                                    <Motion.div
                                         animate={{ scale: [1, 1.6, 1], opacity: [0.5, 0, 0.5] }}
                                         transition={{ repeat: Infinity, duration: 2, ease: 'easeOut' }}
                                         className="absolute inset-0 rounded-full"
@@ -66,10 +66,10 @@ export default function EscalationTimeline({ escalationLevel = 1, status }) {
                                         <span className={pending ? 'opacity-30' : ''}>{step.icon}</span>
                                     )}
                                 </div>
-                            </motion.div>
+                            </Motion.div>
 
                             {/* Labels */}
-                            <motion.div className="mt-3 text-center"
+                            <Motion.div className="mt-3 text-center"
                                 initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: i * 0.15 + 0.2 }}>
                                 <p className="text-xs font-bold"
@@ -81,21 +81,21 @@ export default function EscalationTimeline({ escalationLevel = 1, status }) {
                                     {step.authority}
                                 </p>
                                 {active && !resolved && (
-                                    <motion.span
+                                    <Motion.span
                                         animate={{ opacity: [1, 0.4, 1] }} transition={{ repeat: Infinity, duration: 1.5 }}
                                         className="text-[9px] font-bold px-1.5 py-0.5 rounded-full mt-1 inline-block"
                                         style={{ background: `${step.color}20`, color: step.color, fontFamily: "'DM Sans',sans-serif" }}>
                                         ACTIVE
-                                    </motion.span>
+                                    </Motion.span>
                                 )}
-                            </motion.div>
+                            </Motion.div>
                         </div>
                     );
                 })}
             </div>
 
             {/* Status message */}
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }}
+            <Motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }}
                 className="mt-5 text-center">
                 {resolved ? (
                     <p className="text-sm font-semibold" style={{ color: '#10b981', fontFamily: "'DM Sans',sans-serif" }}>
@@ -110,7 +110,7 @@ export default function EscalationTimeline({ escalationLevel = 1, status }) {
                         Filed at local level — pending review
                     </p>
                 )}
-            </motion.div>
+            </Motion.div>
         </div>
     );
 }

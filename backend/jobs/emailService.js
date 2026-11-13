@@ -3,9 +3,13 @@
 // Add to .env: EMAIL_USER=you@gmail.com  EMAIL_PASS=your_app_password
 
 const nodemailer = require('nodemailer');
+const { escapeHtml } = require('../services/html');
 
 const transporter = nodemailer.createTransport({
     service: 'gmail',
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 10000,
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS, // App Password, NOT your real password
@@ -38,12 +42,12 @@ function buildEmail({ to, subject, heading, body, ctaText, ctaUrl, color = '#10b
           </div>
           <!-- Body -->
           <div style="padding:32px">
-            <h2 style="color:white;font-size:20px;font-weight:700;margin:0 0 12px">${heading}</h2>
+            <h2 style="color:white;font-size:20px;font-weight:700;margin:0 0 12px">${escapeHtml(heading)}</h2>
             <div style="color:rgba(255,255,255,0.65);font-size:14px;line-height:1.7">${body}</div>
             ${ctaText ? `
             <div style="text-align:center;margin-top:28px">
-              <a href="${ctaUrl || '#'}" style="display:inline-block;background:linear-gradient(135deg,${color},#3b82f6);color:white;text-decoration:none;padding:14px 32px;border-radius:14px;font-weight:700;font-size:14px">
-                ${ctaText}
+              <a href="${escapeHtml(ctaUrl || '#')}" style="display:inline-block;background:linear-gradient(135deg,${color},#3b82f6);color:white;text-decoration:none;padding:14px 32px;border-radius:14px;font-weight:700;font-size:14px">
+                ${escapeHtml(ctaText)}
               </a>
             </div>` : ''}
           </div>
@@ -85,11 +89,11 @@ async function notifyStatusUpdate({ citizenEmail, citizenName, complaintTitle, n
         heading: `Complaint Status Updated`,
         color: statusColors[newStatus] || '#10b981',
         body: `
-      <p>Hi <strong style="color:white">${citizenName}</strong>,</p>
-      <p>Your complaint <strong style="color:white">"${complaintTitle}"</strong> has been updated.</p>
+      <p>Hi <strong style="color:white">${escapeHtml(citizenName)}</strong>,</p>
+      <p>Your complaint <strong style="color:white">"${escapeHtml(complaintTitle)}"</strong> has been updated.</p>
       <div style="background:rgba(255,255,255,0.05);border-radius:12px;padding:16px;margin:16px 0;border-left:3px solid ${statusColors[newStatus]}">
         <p style="margin:0;font-size:13px">Status: <strong style="color:${statusColors[newStatus]}">${statusEmojis[newStatus]} ${newStatus}</strong></p>
-        ${adminFeedback ? `<p style="margin:10px 0 0;font-size:13px">Official response: <em style="color:rgba(255,255,255,0.8)">"${adminFeedback}"</em></p>` : ''}
+        ${adminFeedback ? `<p style="margin:10px 0 0;font-size:13px">Official response: <em style="color:rgba(255,255,255,0.8)">"${escapeHtml(adminFeedback)}"</em></p>` : ''}
       </div>
       ${newStatus === 'Resolved' ? '<p>Thank you for using CivicConnect to make your voice heard! 🙏</p>' : '<p>You can track your complaint progress on your dashboard.</p>'}
     `,
@@ -107,8 +111,8 @@ async function notifyEscalation({ citizenEmail, citizenName, complaintTitle, esc
         heading: 'Complaint Escalated',
         color: '#ef4444',
         body: `
-      <p>Hi <strong style="color:white">${citizenName}</strong>,</p>
-      <p>Your complaint <strong style="color:white">"${complaintTitle}"</strong> has been escalated because it did not receive a response within 3 days.</p>
+      <p>Hi <strong style="color:white">${escapeHtml(citizenName)}</strong>,</p>
+      <p>Your complaint <strong style="color:white">"${escapeHtml(complaintTitle)}"</strong> has been escalated because it did not receive a response within 3 days.</p>
       <div style="background:rgba(239,68,68,0.08);border-radius:12px;padding:16px;margin:16px 0;border-left:3px solid #ef4444">
         <p style="margin:0;font-size:13px">Now with: <strong style="color:#ef4444">Level ${escalationLevel} — ${levels[escalationLevel]}</strong></p>
       </div>
@@ -124,7 +128,7 @@ async function sendWelcomeEmail({ email, name, aadhaarVerified }) {
     await sendEmail({
         to: email,
         subject: '🎉 Welcome to CivicConnect — Your voice matters!',
-        heading: `Welcome, ${name}! 👋`,
+        heading: `Welcome, ${escapeHtml(name)}! 👋`,
         color: '#10b981',
         body: `
       <p>You've successfully joined CivicConnect — India's civic intelligence platform.</p>

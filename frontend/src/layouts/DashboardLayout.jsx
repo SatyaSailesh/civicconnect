@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useAuth } from '../context/auth';
+import { motion as Motion, AnimatePresence } from 'framer-motion';
 
 const Icons = {
     dashboard: p => <svg {...p} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>,
@@ -52,7 +52,7 @@ export default function DashboardLayout({ children, search: searchValue, onSearc
 
     const isActive = (path) => location.pathname + location.search === path;
 
-    const NavItem = ({ item, collapsed }) => (
+    const renderNavItem = ({ item, collapsed }) => (
         <Link to={item.path} onClick={() => setMobileOpen(false)}
             className="flex items-center gap-3 px-3 py-2.5 rounded-2xl transition-all duration-200 group relative"
             style={{
@@ -82,7 +82,7 @@ export default function DashboardLayout({ children, search: searchValue, onSearc
         </Link>
     );
 
-    const SidebarContent = ({ collapsed = false }) => (
+    const renderSidebarContent = ({ collapsed = false }) => (
         <div className="flex flex-col h-full">
             {/* Logo */}
             <div className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'} mb-8 px-1`}>
@@ -128,7 +128,7 @@ export default function DashboardLayout({ children, search: searchValue, onSearc
 
             {/* Nav */}
             <nav className="flex-1 space-y-1">
-                {navItems.map(item => <NavItem key={item.path} item={item} collapsed={collapsed} />)}
+                {navItems.map(item => <div key={item.path}>{renderNavItem({ item, collapsed })}</div>)}
             </nav>
 
             {/* Logout */}
@@ -144,7 +144,7 @@ export default function DashboardLayout({ children, search: searchValue, onSearc
     );
 
     return (
-        <div className="min-h-screen" style={{ background: '#03070f', fontFamily: "'Syne','DM Sans',sans-serif" }}>
+        <div className="min-h-screen text-white" style={{ background: '#03070f', fontFamily: "'Syne','DM Sans',sans-serif" }}>
             <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap');
         .glass { background:rgba(255,255,255,0.04); backdrop-filter:blur(16px); border:1px solid rgba(255,255,255,0.08); }
@@ -182,10 +182,10 @@ export default function DashboardLayout({ children, search: searchValue, onSearc
             {/* ── Mobile sidebar overlay ── */}
             <AnimatePresence>
                 {mobileOpen && (
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                    <Motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                         className="fixed inset-0 z-50 lg:hidden" style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}
                         onClick={() => setMobileOpen(false)}>
-                        <motion.div initial={{ x: -300 }} animate={{ x: 0 }} exit={{ x: -300 }}
+                        <Motion.div initial={{ x: -300 }} animate={{ x: 0 }} exit={{ x: -300 }}
                             transition={{ type: 'spring', stiffness: 300, damping: 30 }}
                             className="w-72 h-full p-6 overflow-y-auto"
                             style={{ background: 'rgba(10,16,30,0.98)', borderRight: '1px solid rgba(255,255,255,0.08)' }}
@@ -195,21 +195,21 @@ export default function DashboardLayout({ children, search: searchValue, onSearc
                                 style={{ background: 'rgba(255,255,255,0.06)' }}>
                                 <Icons.x className="w-4 h-4" />
                             </button>
-                            <SidebarContent collapsed={false} />
-                        </motion.div>
-                    </motion.div>
+                            {renderSidebarContent({ collapsed: false })}
+                        </Motion.div>
+                    </Motion.div>
                 )}
             </AnimatePresence>
 
             {/* ── Desktop sidebar ── */}
-            <motion.div animate={{ width: sidebarOpen ? 260 : 72 }}
+            <Motion.div animate={{ width: sidebarOpen ? 260 : 72 }}
                 transition={{ type: 'spring', stiffness: 300, damping: 30 }}
                 className="hidden lg:flex flex-col fixed left-0 top-0 h-full z-30 px-4 py-6"
                 style={{ background: 'rgba(10,16,30,0.95)', backdropFilter: 'blur(20px)', borderRight: '1px solid rgba(255,255,255,0.06)', overflow: 'hidden' }}>
-                <SidebarContent collapsed={!sidebarOpen} />
+                {renderSidebarContent({ collapsed: !sidebarOpen })}
 
                 {/* Toggle button — sits on the right edge of the sidebar, always visible */}
-                <motion.button onClick={() => setSidebarOpen(!sidebarOpen)}
+                <Motion.button onClick={() => setSidebarOpen(!sidebarOpen)}
                     className="absolute right-0 top-24 w-7 h-7 rounded-full flex items-center justify-center z-50"
                     style={{
                         background: '#0d1825',
@@ -222,22 +222,21 @@ export default function DashboardLayout({ children, search: searchValue, onSearc
                     {sidebarOpen
                         ? <Icons.chevronLeft className="w-3.5 h-3.5 text-emerald-400" />
                         : <Icons.chevronRight className="w-3.5 h-3.5 text-emerald-400" />}
-                </motion.button>
-            </motion.div>
+                </Motion.button>
+            </Motion.div>
 
             {/* ── Main content ── */}
-            <motion.div animate={{ marginLeft: sidebarOpen ? 260 : 72 }}
-                transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                className="hidden lg:block min-h-screen">
+            <div style={{ '--sidebar-width': sidebarOpen ? '260px' : '72px' }}
+                className="min-h-screen pt-16 lg:pt-0 lg:ml-[var(--sidebar-width)]">
 
                 {/* Top bar */}
-                <header className="sticky top-0 z-20 flex items-center justify-between px-8 py-4"
+                <header className="sticky top-16 lg:top-0 z-20 flex items-center justify-between gap-3 px-4 lg:px-8 py-4"
                     style={{ background: 'rgba(3,7,15,0.9)', backdropFilter: 'blur(20px)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                     {/* Search */}
                     <div className="relative max-w-sm w-full">
                         <Icons.search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/25" />
                         <input type="text" value={activeSearch} onChange={handleSearchChange}
-                            placeholder="Search complaints..."
+                            aria-label="Search complaints by tracking ID or title" placeholder="Search tracking ID or title..."
                             className="w-full pl-10 pr-4 py-2.5 rounded-2xl text-sm text-white placeholder-white/25 outline-none transition-all"
                             style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', fontFamily: "'DM Sans',sans-serif" }} />
                     </div>
@@ -247,16 +246,9 @@ export default function DashboardLayout({ children, search: searchValue, onSearc
                         {/* Live indicator */}
                         <div className="flex items-center gap-2 px-3 py-1.5 rounded-full"
                             style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.15)' }}>
-                            <motion.span animate={{ opacity: [1, 0.3, 1] }} transition={{ repeat: Infinity, duration: 1.8 }}
+                            <Motion.span animate={{ opacity: [1, 0.3, 1] }} transition={{ repeat: Infinity, duration: 1.8 }}
                                 className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
                             <span className="text-xs text-emerald-400 font-semibold" style={{ fontFamily: "'DM Sans',sans-serif" }}>Live</span>
-                        </div>
-
-                        {/* Bell */}
-                        <div className="relative w-9 h-9 rounded-xl flex items-center justify-center cursor-pointer hover:bg-white/5 transition-colors"
-                            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                            <Icons.bell className="w-4 h-4 text-white/50" />
-                            <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-red-500 rounded-full text-[8px] font-bold flex items-center justify-center text-white">3</span>
                         </div>
 
                         {/* Avatar */}
@@ -268,12 +260,7 @@ export default function DashboardLayout({ children, search: searchValue, onSearc
                     </div>
                 </header>
 
-                <main className="p-8">{children}</main>
-            </motion.div>
-
-            {/* Mobile main content */}
-            <div className="lg:hidden pt-16 min-h-screen">
-                <main className="p-4">{children}</main>
+                <main className="p-4 lg:p-8">{children}</main>
             </div>
         </div>
     );

@@ -7,6 +7,16 @@ const { startEscalationJob } = require("./jobs/EscalationJob");
 
 const app = express();
 
+if (process.env.TRUST_PROXY !== undefined) {
+  const proxySetting = process.env.TRUST_PROXY.trim().toLowerCase();
+  const trustProxy = proxySetting === "true" ? true : proxySetting === "false" ? false
+    : Number.isFinite(Number(proxySetting)) ? Number(proxySetting) : proxySetting;
+  app.set("trust proxy", trustProxy);
+} else if (process.env.NODE_ENV === "production") {
+  // Render terminates TLS and forwards the original client IP through one proxy.
+  app.set("trust proxy", 1);
+}
+
 app.use(cors({
   origin: [
     'http://localhost:5173',
@@ -16,6 +26,11 @@ app.use(cors({
   credentials: true,
 }));
 app.use(express.json());
+app.get("/api/capabilities", (req, res) => res.json({
+  uploads: ["CLOUDINARY_CLOUD_NAME", "CLOUDINARY_API_KEY", "CLOUDINARY_API_SECRET"].every(key => Boolean(process.env[key]?.trim())),
+  email: Boolean(process.env.EMAIL_USER?.trim() && process.env.EMAIL_PASS?.trim()),
+  verification: "synthetic-demo-only",
+}));
 
 app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/complaints", require("./routes/complaintRoutes"));
